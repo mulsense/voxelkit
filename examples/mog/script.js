@@ -1,7 +1,6 @@
 import xnew from '@mulsense/xnew';
 import xthree from '@mulsense/xnew/addons/xthree';
 import * as THREE from 'three';
-import { Stage } from 'model';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -9,7 +8,7 @@ import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
-import { mog3d } from './mog3d.js';
+import voxelkit from 'voxelkit';
 let testpromise;
 
 xnew('#main', Main);
@@ -144,7 +143,7 @@ function Controller(unit) {
 function Test(unit, { position }) {
   const object = xthree.nest(new THREE.Object3D());
   if (testpromise === undefined) {
-    testpromise = mog3d.load('./model.mog').then((mogdata) => mogdata.convertVRM())
+    testpromise = voxelkit.load('./model.mog').then((mogdata) => mogdata.convertVRM())
   }
   
   xnew.promise(testpromise).then((arrayBuffer) => {

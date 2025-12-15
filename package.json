@@ -1,6 +1,6 @@
 {
   "name": "voxelkit",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "A JavaScript/TypeScript library for handling various voxel data formats",
   "main": "dist/voxelkit.js",
   "files": [

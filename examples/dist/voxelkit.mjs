@@ -30,22 +30,105 @@ typeof SuppressedError === "function" ? SuppressedError : function (error, suppr
     return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 };
 
+function segment(bin, p, bitarray = false) {
+    const view = new DataView(bin.buffer);
+    let offset = 0;
+    for (let i = 0; i < p; i++) {
+        offset += ((view.getInt32(offset, true) + 7) >> 3) + 4;
+    }
+    const length = view.getInt32(offset, true);
+    const slice = bin.slice(offset + 4, offset + 4 + ((length + 7) >> 3));
+    return bitarray ? Uint8Array.from({ length }, (_, i) => (slice[i >> 3] >> (i % 8)) & 1) : slice;
+}
+function hmMakeNode(table) {
+    const nodes = [{ val: -1, child: [-1, -1] }];
+    for (let i = 0; i < table.length; i++) {
+        if (table[i].length === 0)
+            continue;
+        let node = nodes[0];
+        for (const bit of table[i]) {
+            if (node.child[bit] === -1) {
+                node.child[bit] = nodes.length;
+                node = { val: -1, child: [-1, -1] };
+                nodes.push(node);
+            }
+            else {
+                node = nodes[node.child[bit]];
+            }
+        }
+        node.val = i;
+    }
+    return nodes;
+}
+function hmMakeTableFromLngs(lngs) {
+    const table = Array.from({ length: lngs.length }, () => []);
+    const nonZero = lngs.filter(n => n > 0);
+    if (nonZero.length === 0)
+        return table;
+    const [maxv, minv] = [Math.max(...nonZero), Math.min(...nonZero)];
+    const bits = new Array(minv).fill(0);
+    let prev = 0;
+    for (let s = minv; s <= maxv; s++) {
+        for (let i = 0; i < lngs.length; i++) {
+            if (lngs[i] !== s)
+                continue;
+            if (prev > 0) {
+                for (let j = bits.length - 1; j >= 0; j--) {
+                    if (bits[j] === 0) {
+                        bits[j] = 1;
+                        break;
+                    }
+                    bits[j] = 0;
+                }
+                bits.push(...new Array(s - prev).fill(0));
+            }
+            prev = s;
+            table[i] = [...bits];
+        }
+    }
+    return table;
+}
+function zlDecode(table, src, code, v0, v1) {
+    const result = [];
+    const nodes = hmMakeNode(table);
+    let node = nodes[0];
+    for (let i = 0; i < src.length; i++) {
+        if ((node = nodes[node.child[src[i]]]).val < 0)
+            continue;
+        if (node.val < code) {
+            result.push(node.val);
+        }
+        else if (node.val === code) {
+            const search = src.slice(i + 1, i + 1 + v0).map((v, s) => v << s).reduce((a, b) => a + b);
+            i += v0;
+            const length = src.slice(i + 1, i + 1 + v1).map((v, s) => v << s).reduce((a, b) => a + b);
+            i += v1;
+            for (let j = 0; j < length; j++) {
+                result.push(result[result.length - search]);
+            }
+        }
+        node = nodes[0];
+    }
+    return result;
+}
+
 const voxelkit = {
     load(path) {
-        return fetch(path).then(response => response.json()).then(json => new Model(json));
+        return fetch(path).then(response => response.json()).then((json) => new Model(json));
     }
 };
 const scale = 1 / 32;
 class Model {
     constructor(json) {
         var _a;
-        this.dsize = json.dsize;
-        this.palette = Uint8Array.from(atob(json.palette), c => c.charCodeAt(0));
-        this.layers = json.layers.map((jsonlayer) => {
+        const jsonmodel = json.models[0];
+        this.dsize = jsonmodel.dsize;
+        this.palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
+        this.layers = jsonmodel.layers.map((jsonlayer) => {
             const [gmap, cmap] = decode(this.dsize, jsonlayer.gmap, jsonlayer.cmap);
             return new Layer(jsonlayer.name, this.dsize, this.palette, gmap, cmap);
         });
-        this.bones = ((_a = json.bones) !== null && _a !== void 0 ? _a : []).reduce((bones, jsonbone) => [...bones, new Bone(jsonbone, bones)], []);
+        this.bones = ((_a = jsonmodel.bones) !== null && _a !== void 0 ? _a : []).reduce((bones, jsonbone) => [...bones, new Bone(jsonbone, bones)], []);
         function decode(dsize, codevmap, codecmap) {
             const gmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
             const cmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
@@ -53,16 +136,16 @@ class Model {
             const bin1 = Uint8Array.from(atob(codecmap), c => c.charCodeAt(0));
             if (bin0.length == 0)
                 return [gmap, cmap];
-            const memA = Code.segment(bin0, 0, true);
-            const memB = Code.decode(Code.table256(), Code.segment(bin0, 1, true), 256, 8, 8);
+            const memA = segment(bin0, 0, true);
+            const memB = zlDecode(table256(), segment(bin0, 1, true), 256, 8, 8);
             const PALETTE_CODE = 256;
-            const data = Code.segment(bin1, 0);
+            const data = segment(bin1, 0);
             const lngs = new Array(PALETTE_CODE + 1).fill(0);
             for (let c = 0; c < data.length - 1; c += 2) {
                 lngs[data[c + 0]] = data[c + 1];
             }
             lngs[PALETTE_CODE] = data[data.length - 1];
-            const memC = Code.decode(Code.hmMakeTableFromLngs(lngs), Code.segment(bin1, 1, true), PALETTE_CODE, 8, 8);
+            const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(bin1, 1, true), PALETTE_CODE, 8, 8);
             let [a, b, c] = [0, 0, 0];
             for (let z = 0; z < Math.ceil(dsize[2] / 8); z++) {
                 for (let y = 0; y < Math.ceil(dsize[1] / 8); y++) {
@@ -171,9 +254,16 @@ class Model {
             const canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
-            canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(imgdata), width, height), 0, 0);
+            const ctx = canvas.getContext('2d');
+            if (!ctx)
+                throw new Error('Could not get 2d context');
+            ctx.putImageData(new ImageData(new Uint8ClampedArray(imgdata), width, height), 0, 0);
             const pngdata = yield new Promise((resolve) => {
-                canvas.toBlob((blob) => blob.arrayBuffer().then(buffer => { resolve(new Uint8Array(buffer)); }), 'image/png');
+                canvas.toBlob((blob) => {
+                    if (!blob)
+                        throw new Error('Could not create blob');
+                    blob.arrayBuffer().then(buffer => { resolve(new Uint8Array(buffer)); });
+                }, 'image/png');
             });
             let binSize = 0;
             binSize += indices.length * 4;
@@ -237,8 +327,10 @@ class Model {
                 { bufferView: 6, byteOffset: 0, componentType: 5126, count: invmats.length / 16, type: "MAT4", normalized: false },
             ];
             const nodes = this.bones.map(bone => {
-                const translation = bone.parent ? bone.vec0.map((v, i) => v + bone.parent.vec1[i]) : bone.vec0;
-                const children = [...this.bones.keys().filter(j => this.bones[j].parent === bone)];
+                const translation = bone.parent
+                    ? [bone.vec0[0] + bone.parent.vec1[0], bone.vec0[1] + bone.parent.vec1[1], bone.vec0[2] + bone.parent.vec1[2]]
+                    : bone.vec0;
+                const children = [...this.bones.keys()].filter(j => this.bones[j].parent === bone);
                 return { name: bone.name, translation, children: children.length > 0 ? children : undefined };
             });
             // model node
@@ -413,6 +505,9 @@ class Layer {
                             case 5:
                                 vtx = [x0, y0, z1, x1, y0, z1, x0, y1, z1, x1, y1, z1, x0, y1, z1, x1, y0, z1];
                                 break;
+                            default:
+                                vtx = [];
+                                break;
                         }
                         let nrm;
                         switch (i) {
@@ -433,6 +528,9 @@ class Layer {
                                 break;
                             case 5:
                                 nrm = [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1];
+                                break;
+                            default:
+                                nrm = [];
                                 break;
                         }
                         let col = [];
@@ -461,9 +559,14 @@ class Bone {
     basePosition() {
         let position = [0.0, 0.0, 0.0];
         let bone = this;
-        while (bone.parent) {
-            position = position.map((v, i) => v + bone.parent.vec0[i] + bone.parent.vec1[i]);
-            bone = bone.parent;
+        while (bone && bone.parent) {
+            const parent = bone.parent;
+            position = [
+                position[0] + parent.vec0[0] + parent.vec1[0],
+                position[1] + parent.vec0[1] + parent.vec1[1],
+                position[2] + parent.vec0[2] + parent.vec1[2]
+            ];
+            bone = parent;
         }
         return position;
     }
@@ -486,113 +589,30 @@ class Bone {
         }
     }
 }
-class Code {
-    static segment(bin, p, bitarray = false) {
-        const view = new DataView(bin.buffer);
-        let offset = 0;
-        for (let i = 0; i < p; i++) {
-            offset += ((view.getInt32(offset, true) + 7) >> 3) + 4;
-        }
-        const length = view.getInt32(offset, true);
-        const slice = bin.slice(offset + 4, offset + 4 + ((length + 7) >> 3));
-        return bitarray ? Uint8Array.from({ length }, (_, i) => (slice[i >> 3] >> (i % 8)) & 1) : slice;
+function table256() {
+    const nodes = [];
+    for (let i = 0; i < 256; i++) {
+        const sum = [...new Array(7).keys()].map(s => ((i >> s) ^ (i >> (s + 1))) & 1).reduce((a, b) => a + b);
+        nodes.push({ cnt: Math.pow(2, (7 - sum)), parent: null });
     }
-    static hmMakeNode(table) {
-        const nodes = [{ val: -1, child: [-1, -1] }];
-        for (let i = 0; i < table.length; i++) {
-            if (table[i].length === 0)
-                continue;
-            let node = nodes[0];
-            for (const bit of table[i]) {
-                if (node.child[bit] === -1) {
-                    node.child[bit] = nodes.length;
-                    node = { val: -1, child: [-1, -1] };
-                    nodes.push(node);
-                }
-                else {
-                    node = nodes[node.child[bit]];
-                }
-            }
-            node.val = i;
+    nodes.push({ cnt: Math.pow(2, 8), parent: null });
+    for (let i = 0; i < 256 + 1 - 1; i++) {
+        const node = { cnt: 0, parent: null };
+        for (let j = 0; j < 2; j++) {
+            const select = nodes.reduce((a, b) => (a.parent !== null || (b.parent === null && b.cnt < a.cnt)) ? b : a);
+            node.cnt += select.cnt;
+            select.parent = node;
         }
-        return nodes;
+        nodes.push(node);
     }
-    static hmMakeTableFromLngs(lngs) {
-        const table = Array.from({ length: lngs.length }, () => []);
-        const nonZero = lngs.filter(n => n > 0);
-        if (nonZero.length === 0)
-            return table;
-        const [maxv, minv] = [Math.max(...nonZero), Math.min(...nonZero)];
-        const bits = new Array(minv).fill(0);
-        let prev = 0;
-        for (let s = minv; s <= maxv; s++) {
-            for (let i = 0; i < lngs.length; i++) {
-                if (lngs[i] !== s)
-                    continue;
-                if (prev > 0) {
-                    for (let j = bits.length - 1; j >= 0; j--) {
-                        if (bits[j] === 0) {
-                            bits[j] = 1;
-                            break;
-                        }
-                        bits[j] = 0;
-                    }
-                    bits.push(...new Array(s - prev).fill(0));
-                }
-                prev = s;
-                table[i] = [...bits];
-            }
+    const lngs = new Array(256 + 1).fill(0);
+    for (let i = 0; i < 256 + 1; i++) {
+        let node = nodes[i];
+        while (node = node.parent) {
+            lngs[i]++;
         }
-        return table;
     }
-    static decode(table, src, code, v0, v1) {
-        const result = [];
-        const nodes = Code.hmMakeNode(table);
-        let node = nodes[0];
-        for (let i = 0; i < src.length; i++) {
-            if ((node = nodes[node.child[src[i]]]).val < 0)
-                continue;
-            if (node.val < code) {
-                result.push(node.val);
-            }
-            else if (node.val === code) {
-                const search = src.slice(i + 1, i + 1 + v0).map((v, s) => v << s).reduce((a, b) => a + b);
-                i += v0;
-                const length = src.slice(i + 1, i + 1 + v1).map((v, s) => v << s).reduce((a, b) => a + b);
-                i += v1;
-                for (let j = 0; j < length; j++) {
-                    result.push(result[result.length - search]);
-                }
-            }
-            node = nodes[0];
-        }
-        return result;
-    }
-    static table256() {
-        const nodes = [];
-        for (let i = 0; i < 256; i++) {
-            const sum = new Array(7).keys().map(s => ((i >> s) ^ (i >> (s + 1))) & 1).reduce((a, b) => a + b);
-            nodes.push({ cnt: Math.pow(2, (7 - sum)), parent: null });
-        }
-        nodes.push({ cnt: Math.pow(2, 8), parent: null });
-        for (let i = 0; i < 256 + 1 - 1; i++) {
-            const node = { cnt: 0, parent: null };
-            for (let j = 0; j < 2; j++) {
-                const select = nodes.reduce((a, b) => (a.parent !== null || (b.parent === null && b.cnt < a.cnt)) ? b : a);
-                node.cnt += select.cnt;
-                select.parent = node;
-            }
-            nodes.push(node);
-        }
-        const lngs = new Array(256 + 1).fill(0);
-        for (let i = 0; i < 256 + 1; i++) {
-            let node = nodes[i];
-            while (node = node.parent) {
-                lngs[i]++;
-            }
-        }
-        return Code.hmMakeTableFromLngs(lngs);
-    }
+    return hmMakeTableFromLngs(lngs);
 }
 
 export { voxelkit as default };
