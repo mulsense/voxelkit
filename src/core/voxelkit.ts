@@ -1,7 +1,20 @@
-import { Model, MOG3DJSON } from './mog3d';
+import { Model, loadMOG } from './mog3d';
 
 export const voxelkit = {
     load(path: string): Promise<Model> {
-        return fetch(path).then(response => response.json()).then((json: MOG3DJSON) => new Model(json));
+        const extension = path.split('.').pop()?.toLowerCase();
+
+        switch (extension) {
+            case 'mog': return loadMOG(path);
+
+            // 将来的に他のフォーマットをここに追加
+            // case 'vox':
+            //     return loadVoxFormat(path);
+            // case 'qb':
+            //     return loadQubicleFormat(path);
+
+            default:
+                return Promise.reject(new Error(`Unsupported file format: ${extension}`));
+        }
     }
 };

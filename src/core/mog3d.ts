@@ -26,6 +26,12 @@ export interface BoneJSON {
 
 const scale: number = 1 / 32;
 
+export function loadMOG(path: string): Promise<Model> {
+    return fetch(path)
+        .then(response => response.json())
+        .then((json: MOG3DJSON) => new Model(json));
+}
+
 export class Model {
     dsize: [number, number, number];
     palette: Uint8Array;

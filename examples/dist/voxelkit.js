@@ -118,12 +118,12 @@
         return result;
     }
 
-    const voxelkit = {
-        load(path) {
-            return fetch(path).then(response => response.json()).then((json) => new Model(json));
-        }
-    };
     const scale = 1 / 32;
+    function loadMOG(path) {
+        return fetch(path)
+            .then(response => response.json())
+            .then((json) => new Model(json));
+    }
     class Model {
         constructor(json) {
             var _a;
@@ -620,6 +620,24 @@
         }
         return hmMakeTableFromLngs(lngs);
     }
+
+    const voxelkit = {
+        load(path) {
+            var _a;
+            const extension = (_a = path.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+            switch (extension) {
+                case 'mog':
+                    return loadMOG(path);
+                // 将来的に他のフォーマットをここに追加
+                // case 'vox':
+                //     return loadVoxFormat(path);
+                // case 'qb':
+                //     return loadQubicleFormat(path);
+                default:
+                    return Promise.reject(new Error(`Unsupported file format: ${extension}`));
+            }
+        }
+    };
 
     return voxelkit;
 

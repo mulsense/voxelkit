@@ -19,9 +19,6 @@ interface BoneJSON {
     vec0: [number, number, number];
     vec1: [number, number, number];
 }
-declare const voxelkit: {
-    load(path: string): Promise<Model>;
-};
 declare class Model {
     dsize: [number, number, number];
     palette: Uint8Array;
@@ -47,5 +44,9 @@ declare class Bone {
     basePosition(): [number, number, number];
     distance(vec: number[]): number;
 }
+
+declare const voxelkit: {
+    load(path: string): Promise<Model>;
+};
 
 export { voxelkit as default };
