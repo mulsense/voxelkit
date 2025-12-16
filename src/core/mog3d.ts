@@ -26,8 +26,15 @@ export async function loadMOG(path: string, scale: number): Promise<[Model[], Bo
     return [models, bones];
 }
 
-function decode(dsize: [number, number, number], palette: Uint8Array,
-    name: string, codevmap: string, codecmap: string, scale: number): Model {
+function decode(
+    dsize: [number, number, number],
+    palette: Uint8Array,
+    name: string,
+    codevmap: string,
+    codecmap: string,
+    scale: number)
+    : Model
+{
     const gmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
     const cmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
 

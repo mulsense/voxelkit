@@ -14,12 +14,14 @@ let testpromise;
 xnew('#main', Main);
 
 function Main(main) {
-  xnew.extend(xnew.basics.Screen, { width: 600, height: 600 });
+  xnew.extend(xnew.basics.Screen, { width: 800, height: 800 });
 
   // three setup
   xthree.initialize({ canvas: main.canvas });
   xthree.renderer.shadowMap.enabled = true;
   xthree.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  xthree.scene.background = new THREE.Color(0xe0e0f0);
+  xthree.scene.fog = new THREE.Fog(0xe0e0f0, 10, 30);
   xthree.camera.position.set(0, 0, +2);
   xthree.scene.rotation.x = -60 / 180 * Math.PI
 
@@ -30,9 +32,9 @@ function Main(main) {
   const composer = new EffectComposer(xthree.renderer);
   composer.addPass(new RenderPass(xthree.scene, xthree.camera));
   const ssaoPass = new SSAOPass(xthree.scene, xthree.camera, xthree.canvas.width, xthree.canvas.height);
-  ssaoPass.kernelRadius = 0.3;      // サンプリング半径
-  ssaoPass.minDistance = 0.000001;   // 最小距離
-  ssaoPass.maxDistance = 0.0001;     // 最大距離
+  ssaoPass.kernelRadius = 0.1;      // サンプリング半径
+  ssaoPass.minDistance = 0.00001;   // 最小距離
+  ssaoPass.maxDistance = 0.00005;     // 最大距離
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
@@ -49,8 +51,6 @@ function ThreeMain(unit) {
   xnew(DirectionaLight, { x: 1, y: -1, z: 2 });
   xnew(AmbientLight);
   xnew(Ground, { size: 100, color: 0xF8F8FF });
-  xnew(Dorm, { size: 50 });
-  // xnew(Cube, { x: 0, y: 0, z: 2, size: 4, color: 0xAAAAFF });
 
   xnew(Test, { id: 0, position: { x: 0, y: 0, z: 0 } });
   for (let i = 0; i < 0; i++) {
@@ -58,8 +58,6 @@ function ThreeMain(unit) {
     const y = Math.random() * 6 - 3;
     xnew(Test, { id: i, position: { x: x, y: y, z: 0 } });
   }
-
-  // xnew(Stage, { path: 'model.mog' });
 
   unit.on('+scale', ({ scale }) => {
     xthree.camera.position.z /= scale;
@@ -96,25 +94,11 @@ function AmbientLight(unit) {
   const object = xthree.nest(new THREE.AmbientLight(0xFFFFFF, 1.5));
 }
 
-function Dorm(unit, { size }) {
-  const geometry = new THREE.SphereGeometry(size, 25, 25);
-  const material = new THREE.MeshBasicMaterial({ color: 0xEEEEFF, side: THREE.BackSide });
-  const object = xthree.nest(new THREE.Mesh(geometry, material));
-}
-
-function Ground(unit, { size, color }) {
-  const geometry = new THREE.PlaneGeometry(size, size, 1, 1);
-  const material = new THREE.MeshStandardMaterial({ color, transparent: true, });
+function Ground(unit) {
+  const geometry = new THREE.PlaneGeometry(100, 100);
+  const material = new THREE.MeshPhongMaterial({ color: 0xffffff, depthWrite: true });
   const object = xthree.nest(new THREE.Mesh(geometry, material));
   object.receiveShadow = true;
-}
-
-function Cube(unit, { x, y, z, size, color }) {
-  const geometry = new THREE.BoxGeometry(size, size, size);
-  const material = new THREE.MeshLambertMaterial({ color, });
-  const object = xthree.nest(new THREE.Mesh(geometry, material));
-  object.position.set(x, y, z);
-  object.castShadow = true;
 }
 
 function Controller(unit) {
