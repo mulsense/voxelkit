@@ -1,13 +1,17 @@
-import { Model, loadMOG } from './mog3d';
+import { loadMOG } from './mog3d';
+import { convertVRM } from './vrm';
 
 export const voxelkit = {
-    load(path: string): Promise<Model> {
+    load(path: string, options: { format: string, scale: number } = { format: 'vrm', scale: 1 / 32 }): any {
         const extension = path.split('.').pop()?.toLowerCase();
 
         switch (extension) {
-            case 'mog': return loadMOG(path);
+            case 'mog': {
+                return loadMOG(path, options.scale).then(([models, bones]) => {
+                    return convertVRM(models, bones);
+                });
+            }
 
-            // 将来的に他のフォーマットをここに追加
             // case 'vox':
             //     return loadVoxFormat(path);
             // case 'qb':

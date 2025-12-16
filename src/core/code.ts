@@ -78,3 +78,31 @@ export function zlDecode(table: number[][], src: Uint8Array, code: number, v0: n
     }
     return result;
 }
+
+
+export function table256(): number[][] {
+    type NodeType = { cnt: number; parent: NodeType | null };
+    const nodes: NodeType[] = [];
+    for (let i = 0; i < 256; i++) {
+        const sum = [...new Array(7).keys()].map(s => ((i >> s) ^ (i >> (s + 1))) & 1).reduce((a, b) => a + b);
+        nodes.push({ cnt: 2 ** (7 - sum), parent: null });
+    }
+    nodes.push({ cnt: 2 ** 8, parent: null });
+
+    for (let i = 0; i < 256 + 1 - 1; i++) {
+        const node: NodeType = { cnt: 0, parent: null };
+        for (let j = 0; j < 2; j++) {
+            const select = nodes.reduce((a, b) => (a.parent !== null || (b.parent === null && b.cnt < a.cnt)) ? b : a);
+            node.cnt += select.cnt;
+            select.parent = node;
+        }
+        nodes.push(node);
+    }
+
+    const lngs = new Array(256 + 1).fill(0);
+    for (let i = 0; i < 256 + 1; i++) {
+        let node: NodeType | null = nodes[i];
+        while (node = node.parent) { lngs[i]++; }
+    }
+    return hmMakeTableFromLngs(lngs);
+}

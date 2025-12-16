@@ -24,12 +24,10 @@ export default [
             {
                 file: './dist/voxelkit.mjs',
                 format: 'es',
-            }
+            },
         ],
         plugins: [
             typescript({ tsconfig: 'tsconfig.json' }),
-            copyto('./dist/voxelkit.js', './examples/dist/voxelkit.js'),
-            copyto('./dist/voxelkit.mjs', './examples/dist/voxelkit.mjs'),
         ],
         watch: {
             clearScreen: false,
@@ -44,7 +42,6 @@ export default [
         plugins: [
             dts(),
             //cleanup('./dist/types'),
-            copyto('./dist/voxelkit.d.ts', './examples/dist/voxelkit.d.ts'),
         ],
         watch: {
             clearScreen: false,

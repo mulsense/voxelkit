@@ -143,7 +143,7 @@ function Controller(unit) {
 function Test(unit, { position }) {
   const object = xthree.nest(new THREE.Object3D());
   if (testpromise === undefined) {
-    testpromise = voxelkit.load('./model.mog').then((mogdata) => mogdata.convertVRM())
+    testpromise = voxelkit.load('./model.mog')
   }
   
   xnew.promise(testpromise).then((arrayBuffer) => {
