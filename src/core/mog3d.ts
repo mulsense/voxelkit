@@ -12,7 +12,7 @@ export async function loadMOG(path: string, scale: number): Promise<[Model[], Bo
     const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
 
     const models = jsonmodel.layers.map((jsonlayer: any) => {
-        return decode(dsize, palette, jsonlayer.name, jsonlayer.gmap, jsonlayer.cmap, scale);
+        return decode(dsize, palette, jsonlayer.name, jsonlayer.data, scale);
     });
 
     const bones: Bone[] = [];
@@ -31,7 +31,6 @@ function decode(
     palette: Uint8Array,
     name: string,
     codevmap: string,
-    codecmap: string,
     scale: number)
     : Model
 {
@@ -39,21 +38,20 @@ function decode(
     const cmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
 
     const bin0 = Uint8Array.from(atob(codevmap), c => c.charCodeAt(0));
-    const bin1 = Uint8Array.from(atob(codecmap), c => c.charCodeAt(0));
     if (bin0.length == 0) return new Model(name, 0);
 
     const memA = segment(bin0, 0, true);
     const memB = zlDecode(table256(), segment(bin0, 1, true), 256, 8, 8);
 
     const PALETTE_CODE = 256;
-    const data = segment(bin1, 0);
+    const data = segment(bin0, 2);
     const lngs = new Array(PALETTE_CODE + 1).fill(0);
     for (let c = 0; c < data.length - 1; c += 2) {
         lngs[data[c + 0]] = data[c + 1];
     }
     lngs[PALETTE_CODE] = data[data.length - 1];
 
-    const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(bin1, 1, true), PALETTE_CODE, 8, 8);
+    const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(bin0, 3, true), PALETTE_CODE, 8, 8);
 
     let [a, b, c] = [0, 0, 0];
     for (let z = 0; z < Math.ceil(dsize[2] / 8); z++) {

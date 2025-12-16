@@ -52,12 +52,14 @@ function ThreeMain(unit) {
   xnew(AmbientLight);
   xnew(Ground, { size: 100, color: 0xF8F8FF });
 
-  xnew(Test, { id: 0, position: { x: 0, y: 0, z: 0 } });
-  for (let i = 0; i < 0; i++) {
-    const x = Math.random() * 6 - 3;
-    const y = Math.random() * 6 - 3;
-    xnew(Test, { id: i, position: { x: x, y: y, z: 0 } });
-  }
+  xnew.promise(voxelkit.load('./model.mog')).then((arrayBuffer) => {
+      xnew(Test, { arrayBuffer, position: { x: 0, y: 0, z: 0 } });
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * 6 - 3;
+      const y = Math.random() * 6 - 3;
+      xnew(Test, { arrayBuffer, position: { x: x, y: y, z: 0 } });
+    }
+  });
 
   unit.on('+scale', ({ scale }) => {
     xthree.camera.position.z /= scale;
@@ -87,7 +89,7 @@ function DirectionaLight(unit, { x, y, z }) {
   object.shadow.camera.bottom = +s * 1.0;
   object.shadow.camera.near = +s * 0.1;
   object.shadow.camera.far = +s * 10.0;
-  // object.shadow.camera.updateProjectionMatrix();
+  object.shadow.camera.updateProjectionMatrix();
 }
 
 function AmbientLight(unit) {
@@ -124,61 +126,56 @@ function Controller(unit) {
   pointer.on('-wheel', ({ delta }) => unit.emit('+scale', { scale: 1 + 0.001 * delta.y }));
 }
 
-function Test(unit, { position }) {
+function Test(unit, { arrayBuffer, position }) {
   const object = xthree.nest(new THREE.Object3D());
-  if (testpromise === undefined) {
-    testpromise = voxelkit.load('./model.mog')
-  }
   
-  xnew.promise(testpromise).then((arrayBuffer) => {
-    console.log('VRM URL created:', arrayBuffer);
-    xnew.promise(new Promise((resolve) => {
-      const loader = new GLTFLoader();
-      loader.register((parser) => new VRMLoaderPlugin(parser));
-      loader.parse(arrayBuffer.buffer, '', (gltf) => {
-        resolve(gltf);
-      }, (error) => {
-        console.error('Failed to load VRM:', error);
-      });
-    })).then((gltf) => {
-      const vrm = gltf.userData.vrm;
-      vrm.scene.traverse((obj) => {
-        if (obj.isMesh) {
-          obj.castShadow = true;
-          obj.receiveShadow = true;
-        }
-      });
-      const scene = vrm.scene;
-      scene.rotation.x = Math.PI / 2;
-      scene.position.set(position.x, position.y, position.z);
-      object.add(scene);
-      const random = Math.random() * 10;
-      const neck = vrm.humanoid.getNormalizedBoneNode('neck');
-      const chest = vrm.humanoid.getNormalizedBoneNode('chest');
-      const hips = vrm.humanoid.getNormalizedBoneNode('hips');
-      const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
-      const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-      const leftUpperLeg = vrm.humanoid.getNormalizedBoneNode('leftUpperLeg');
-      const rightUpperLeg = vrm.humanoid.getNormalizedBoneNode('rightUpperLeg');
+  console.log('VRM URL created:', arrayBuffer);
+  xnew.promise(new Promise((resolve) => {
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+    loader.parse(arrayBuffer.buffer, '', (gltf) => {
+      resolve(gltf);
+    }, (error) => {
+      console.error('Failed to load VRM:', error);
+    });
+  })).then((gltf) => {
+    const vrm = gltf.userData.vrm;
+    vrm.scene.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
+    const scene = vrm.scene;
+    scene.rotation.x = Math.PI / 2;
+    scene.position.set(position.x, position.y, position.z);
+    object.add(scene);
+    const random = Math.random() * 10;
+    const neck = vrm.humanoid.getNormalizedBoneNode('neck');
+    const chest = vrm.humanoid.getNormalizedBoneNode('chest');
+    const hips = vrm.humanoid.getNormalizedBoneNode('hips');
+    const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+    const leftUpperLeg = vrm.humanoid.getNormalizedBoneNode('leftUpperLeg');
+    const rightUpperLeg = vrm.humanoid.getNormalizedBoneNode('rightUpperLeg');
 
-      // if (id % 100 > 0) return;
-      let count = 8;
-      unit.on('-update', () => {
-        const t = (count + random) * 0.03;
-        neck.rotation.x = Math.sin(t * 6) * +0.1;
-        chest.rotation.x = Math.sin(t * 12) * +0.1;
-        hips.position.z = Math.sin(t * 12) * 0.02;
-        leftUpperArm.rotation.z = Math.sin(t * 12 + random) * +0.7;
-        leftUpperArm.rotation.x = Math.sin(t * 6 + random) * +0.8;
-        rightUpperArm.rotation.z = Math.sin(t * 12) * -0.7;
-        rightUpperArm.rotation.x = Math.sin(t * 6) * +0.8;
-        leftUpperLeg.rotation.z = Math.sin(t * 8) * +0.2;
-        leftUpperLeg.rotation.x = Math.sin(t * 12) * +0.7;
-        rightUpperLeg.rotation.z = Math.sin(t * 8) * -0.2;
-        rightUpperLeg.rotation.x = Math.sin(t * 12) * -0.7;
-        vrm.update(t);
-        count += 0.5;
-      });
+    // if (id % 100 > 0) return;
+    let count = 8;
+    unit.on('-update', () => {
+      const t = (count + random) * 0.03;
+      neck.rotation.x = Math.sin(t * 6) * +0.1;
+      chest.rotation.x = Math.sin(t * 12) * +0.1;
+      hips.position.z = Math.sin(t * 12) * 0.02;
+      leftUpperArm.rotation.z = Math.sin(t * 12 + random) * +0.7;
+      leftUpperArm.rotation.x = Math.sin(t * 6 + random) * +0.8;
+      rightUpperArm.rotation.z = Math.sin(t * 12) * -0.7;
+      rightUpperArm.rotation.x = Math.sin(t * 6) * +0.8;
+      leftUpperLeg.rotation.z = Math.sin(t * 8) * +0.2;
+      leftUpperLeg.rotation.x = Math.sin(t * 12) * +0.7;
+      rightUpperLeg.rotation.z = Math.sin(t * 8) * -0.2;
+      rightUpperLeg.rotation.x = Math.sin(t * 12) * -0.7;
+      vrm.update(t);
+      count += 0.5;
     });
   });
 
