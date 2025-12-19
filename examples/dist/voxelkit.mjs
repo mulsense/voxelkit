@@ -219,7 +219,7 @@ function loadMOG(path, scale) {
         const dsize = jsonmodel.dsize;
         const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
         const models = jsonmodel.layers.map((jsonlayer) => {
-            return decode(dsize, palette, jsonlayer.name, jsonlayer.data, scale);
+            return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
         });
         const bones = [];
         for (const jsonbone of ((_a = jsonmodel.bones) !== null && _a !== void 0 ? _a : [])) {
@@ -231,22 +231,22 @@ function loadMOG(path, scale) {
         return [models, bones];
     });
 }
-function decode(dsize, palette, name, codevmap, scale) {
+function decode(dsize, palette, name, map, scale) {
     const gmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
     const cmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
-    const bin0 = Uint8Array.from(atob(codevmap), c => c.charCodeAt(0));
-    if (bin0.length == 0)
+    const mapbin = Uint8Array.from(atob(map), c => c.charCodeAt(0));
+    if (mapbin.length == 0)
         return new Model(name, 0);
-    const memA = segment(bin0, 0, true);
-    const memB = zlDecode(table256(), segment(bin0, 1, true), 256, 8, 8);
+    const memA = segment(mapbin, 0, true);
+    const memB = zlDecode(table256(), segment(mapbin, 1, true), 256, 8, 8);
     const PALETTE_CODE = 256;
-    const data = segment(bin0, 2);
+    const data = segment(mapbin, 2);
     const lngs = new Array(PALETTE_CODE + 1).fill(0);
     for (let c = 0; c < data.length - 1; c += 2) {
         lngs[data[c + 0]] = data[c + 1];
     }
     lngs[PALETTE_CODE] = data[data.length - 1];
-    const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(bin0, 3, true), PALETTE_CODE, 8, 8);
+    const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(mapbin, 3, true), PALETTE_CODE, 8, 8);
     let [a, b, c] = [0, 0, 0];
     for (let z = 0; z < Math.ceil(dsize[2] / 8); z++) {
         for (let y = 0; y < Math.ceil(dsize[1] / 8); y++) {
@@ -571,7 +571,7 @@ function convertVRM(models, bones) {
             scenes: [{ nodes: [0, bones.length] }],
             scene: 0,
             textures: [{ sampler: 0, source: 0 }],
-            samplers: [{ magFilter: 9729, minFilter: 9985, wrapS: 10497, wrapT: 10497 }],
+            samplers: [{ magFilter: 9728, minFilter: 9728, wrapS: 10497, wrapT: 10497 }],
             images: [{ bufferView: 7, name: "model_texture", mimeType: "image/png" }],
             extensions: {
                 VRMC_vrm: {

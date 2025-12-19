@@ -203,7 +203,7 @@ export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8A
         scenes: [{ nodes: [0, bones.length] }],
         scene: 0,
         textures: [{ sampler: 0, source: 0 }],
-        samplers: [{ magFilter: 9729, minFilter: 9985, wrapS: 10497, wrapT: 10497 }],
+        samplers: [{ magFilter: 9728, minFilter: 9728, wrapS: 10497, wrapT: 10497 }],
         images: [{ bufferView: 7, name: "model_texture", mimeType: "image/png" }],
         extensions: {
             VRMC_vrm: {
