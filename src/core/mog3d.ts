@@ -1,29 +1,30 @@
 import { segment, hmMakeTableFromLngs, table256, zlDecode } from './code';
 import { Vec3 } from './vector';
-import { Bone } from './bone';
-import { Model } from './model';
+import { Composit, Model, Bone } from './model';
 
-export async function loadMOG(path: string, scale: number): Promise<[Model[], Bone[]]> {
+export async function loadMOG(path: string, scale: number): Promise<Composit[]> {
     const response = await fetch(path);
     const json = await response.json();
+    const composits: Composit[] = [];
+    for (const jsonmodel of json.models) {
+        const dsize = jsonmodel.dsize;
+        const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
 
-    const jsonmodel = json.models[0];
-    const dsize = jsonmodel.dsize;
-    const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
+        const models = jsonmodel.layers.map((jsonlayer: any) => {
+            return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
+        });
 
-    const models = jsonmodel.layers.map((jsonlayer: any) => {
-        return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
-    });
-
-    const bones: Bone[] = [];
-    for(const jsonbone of (jsonmodel.bones ?? [])) {
-        const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null
-        const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), scale);
-        const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), scale);
-        bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
+        const bones: Bone[] = [];
+        for(const jsonbone of (jsonmodel.bones ?? [])) {
+            const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null
+            const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), scale);
+            const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), scale);
+            bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
+        }
+        composits.push({ models, bones });
     }
-
-    return [models, bones];
+   
+    return composits;
 }
 
 function decode(

@@ -52,7 +52,8 @@ function ThreeMain(unit) {
   xnew(AmbientLight);
   xnew(Ground, { size: 100, color: 0xF8F8FF });
 
-  xnew.promise(voxelkit.load('./model.mog')).then((arrayBuffer) => {
+  xnew.promise(voxelkit.load('./model.mog')).then((composits) => voxelkit.convertVRM(composits[0]))
+  .then((arrayBuffer) => {
       xnew(Test, { arrayBuffer, position: { x: 0, y: 0, z: 0 } });
     for (let i = 0; i < 10; i++) {
       const x = Math.random() * 6 - 3;
@@ -129,7 +130,6 @@ function Controller(unit) {
 function Test(unit, { arrayBuffer, position }) {
   const object = xthree.nest(new THREE.Object3D());
   
-  console.log('VRM URL created:', arrayBuffer);
   xnew.promise(new Promise((resolve) => {
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));

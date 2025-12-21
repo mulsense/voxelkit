@@ -169,6 +169,16 @@
         }
     }
 
+    class Model {
+        constructor(name, size) {
+            this.name = name;
+            this.indices = new Int32Array(size);
+            this.vertexs = new Float32Array(size * 3);
+            this.normals = new Float32Array(size * 3);
+            this.coords = new Float32Array(size * 2);
+            this.colors = new Int8Array(size * 3);
+        }
+    }
     class Bone {
         constructor(parent, name, vec0, vec1, refs) {
             this.parent = parent;
@@ -205,36 +215,28 @@
         }
     }
 
-    class Model {
-        constructor(name, size) {
-            this.name = name;
-            this.indices = new Int32Array(size);
-            this.vertexs = new Float32Array(size * 3);
-            this.normals = new Float32Array(size * 3);
-            this.coords = new Float32Array(size * 2);
-            this.colors = new Int8Array(size * 3);
-        }
-    }
-
     function loadMOG(path, scale) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
             const response = yield fetch(path);
             const json = yield response.json();
-            const jsonmodel = json.models[0];
-            const dsize = jsonmodel.dsize;
-            const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
-            const models = jsonmodel.layers.map((jsonlayer) => {
-                return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
-            });
-            const bones = [];
-            for (const jsonbone of ((_a = jsonmodel.bones) !== null && _a !== void 0 ? _a : [])) {
-                const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null;
-                const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), scale);
-                const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), scale);
-                bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
+            const composits = [];
+            for (const jsonmodel of json.models) {
+                const dsize = jsonmodel.dsize;
+                const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
+                const models = jsonmodel.layers.map((jsonlayer) => {
+                    return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
+                });
+                const bones = [];
+                for (const jsonbone of ((_a = jsonmodel.bones) !== null && _a !== void 0 ? _a : [])) {
+                    const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null;
+                    const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), scale);
+                    const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), scale);
+                    bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
+                }
+                composits.push({ models, bones });
             }
-            return [models, bones];
+            return composits;
         });
     }
     function decode(dsize, palette, name, map, scale) {
@@ -644,14 +646,12 @@
     }
 
     const voxelkit = {
-        load(path, options = { format: 'vrm', scale: 1 / 32 }) {
+        load(path, options = { scale: 1 / 32 }) {
             var _a;
             const extension = (_a = path.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
             switch (extension) {
                 case 'mog': {
-                    return loadMOG(path, options.scale).then(([models, bones]) => {
-                        return convertVRM(models, bones);
-                    });
+                    return loadMOG(path, options.scale);
                 }
                 // case 'vox':
                 //     return loadVoxFormat(path);
@@ -660,6 +660,9 @@
                 default:
                     return Promise.reject(new Error(`Unsupported file format: ${extension}`));
             }
+        },
+        convertVRM(composit) {
+            return convertVRM(composit.models, composit.bones);
         }
     };
 

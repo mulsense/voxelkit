@@ -1,15 +1,14 @@
+import { Composit } from './model';
 import { loadMOG } from './mog3d';
 import { convertVRM } from './vrm';
 
 export const voxelkit = {
-    load(path: string, options: { format: string, scale: number } = { format: 'vrm', scale: 1 / 32 }): any {
+    load(path: string, options: { scale: number } = { scale: 1 / 32 }): any {
         const extension = path.split('.').pop()?.toLowerCase();
 
         switch (extension) {
             case 'mog': {
-                return loadMOG(path, options.scale).then(([models, bones]) => {
-                    return convertVRM(models, bones);
-                });
+                return loadMOG(path, options.scale);
             }
 
             // case 'vox':
@@ -20,5 +19,9 @@ export const voxelkit = {
             default:
                 return Promise.reject(new Error(`Unsupported file format: ${extension}`));
         }
+    },
+
+    convertVRM(composit: Composit) {
+        return convertVRM(composit.models, composit.bones);
     }
 };
