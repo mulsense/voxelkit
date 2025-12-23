@@ -439,19 +439,16 @@ function convertVRM(models, bones) {
             invmats.push(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -t.x, -t.y, -t.z, 1);
         }
         const width = 1024;
-        const height = Math.pow(2, Math.ceil(Math.log2((4 * model.colors.length / 3 + width - 1) / width))) >> 0;
-        const imgdata = new Uint8Array(width * height * 4).fill(255);
+        const height = Math.pow(2, Math.ceil(Math.log2((model.colors.length / 3 + width - 1) / width))) >> 0;
+        const imgdata = new Uint8Array(width * height * 4);
         for (let i = 0; i < model.colors.length / 3; i++) {
-            const x = (i * 2) % (((width / 6) >> 0) * 6);
-            const y = (((i * 2) / (((width / 6) >> 0) * 6)) >> 0) * 2;
-            for (let iy = 0; iy < 2; iy++) {
-                for (let ix = 0; ix < 2; ix++) {
-                    imgdata[((y + iy) * width + (x + ix)) * 4 + 0] = model.colors[i * 3 + 0];
-                    imgdata[((y + iy) * width + (x + ix)) * 4 + 1] = model.colors[i * 3 + 1];
-                    imgdata[((y + iy) * width + (x + ix)) * 4 + 2] = model.colors[i * 3 + 2];
-                }
-            }
-            model.coords.set([(x + 1) / width, (y + 1) / height], i * 2);
+            const s = ((width / 6) >> 0) * 6; // align 6 (2 triangles)
+            const [x, y] = [i % s, (i / s) >> 0];
+            imgdata[(y * width + (x + 0)) * 4 + 0] = model.colors[i * 3 + 0];
+            imgdata[(y * width + (x + 0)) * 4 + 1] = model.colors[i * 3 + 1];
+            imgdata[(y * width + (x + 0)) * 4 + 2] = model.colors[i * 3 + 2];
+            imgdata[(y * width + (x + 0)) * 4 + 3] = 255;
+            model.coords.set([(x + 0.5) / width, (y + 0.5) / height], i * 2);
         }
         const canvas = document.createElement('canvas');
         canvas.width = width;
@@ -510,7 +507,7 @@ function convertVRM(models, bones) {
             bufferViews.push({ buffer: 0, byteOffset: offset, byteLength: pngdata.length });
             offset += pngdata.length;
         }
-        let [max, min] = [[1e3, 1e3, 1e3], [-1e3, -1e3, -1e3]];
+        let [max, min] = [[-1e3, -1e3, -1e3], [1e3, 1e3, 1e3]];
         for (let i = 0; i < model.vertexs.length / 3; i++) {
             min[0] = Math.min(min[0], model.vertexs[i * 3 + 0]);
             min[1] = Math.min(min[1], model.vertexs[i * 3 + 1]);

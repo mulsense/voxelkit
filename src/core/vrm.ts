@@ -1,6 +1,5 @@
 import { Vec3 } from './vector';
-import { Bone } from './bone';
-import { Model } from './model';
+import { Model, Bone } from './model';
 
 export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8Array> {
     const size = models.reduce((a, b) => a + b.indices.length, 0);
@@ -68,21 +67,17 @@ export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8A
     }
 
     const width = 1024;
-    const height = Math.pow(2, Math.ceil(Math.log2((4 * model.colors.length / 3 + width - 1) / width))) >> 0;
-    const imgdata = new Uint8Array(width * height * 4).fill(255);
-
+    const height = Math.pow(2, Math.ceil(Math.log2((model.colors.length / 3 + width - 1) / width))) >> 0;
+    const imgdata = new Uint8Array(width * height * 4);
     for (let i = 0; i < model.colors.length / 3; i++) {
-        const x = (i * 2) % (((width / 6) >> 0) * 6);
-        const y = (((i * 2) / (((width / 6) >> 0) * 6)) >> 0) * 2;
+        const s = ((width / 6) >> 0) * 6; // align 6 (2 triangles)
+        const [x, y] = [i % s, (i / s) >> 0];
 
-        for (let iy = 0; iy < 2; iy++) {
-            for (let ix = 0; ix < 2; ix++) {
-                imgdata[((y + iy) * width + (x + ix)) * 4 + 0] = model.colors[i * 3 + 0];
-                imgdata[((y + iy) * width + (x + ix)) * 4 + 1] = model.colors[i * 3 + 1];
-                imgdata[((y + iy) * width + (x + ix)) * 4 + 2] = model.colors[i * 3 + 2];
-            }
-        }
-        model.coords.set([(x + 1) / width, (y + 1) / height], i * 2);
+        imgdata[(y * width + (x + 0)) * 4 + 0] = model.colors[i * 3 + 0];
+        imgdata[(y * width + (x + 0)) * 4 + 1] = model.colors[i * 3 + 1];
+        imgdata[(y * width + (x + 0)) * 4 + 2] = model.colors[i * 3 + 2];
+        imgdata[(y * width + (x + 0)) * 4 + 3] = 255;
+        model.coords.set([(x + 0.5) / width, (y + 0.5) / height], i * 2);
     }
 
     const canvas = document.createElement('canvas');
@@ -137,7 +132,7 @@ export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8A
         bufferViews.push({ buffer: 0, byteOffset: offset, byteLength: pngdata.length }); offset += pngdata.length;
     }
 
-    let [max, min] = [[+1000, +1000, +1000], [-1000, -1000, -1000]];
+    let [max, min] = [[-1000, -1000, -1000], [+1000, +1000, +1000]];
     for (let i = 0; i < model.vertexs.length / 3; i++) {
         min[0] = Math.min(min[0], model.vertexs[i * 3 + 0]);
         min[1] = Math.min(min[1], model.vertexs[i * 3 + 1]);
@@ -146,6 +141,7 @@ export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8A
         max[1] = Math.max(max[1], model.vertexs[i * 3 + 1]);
         max[2] = Math.max(max[2], model.vertexs[i * 3 + 2]);
     }
+
     const accessors = [
         { bufferView: 0, byteOffset: 0, componentType: 5125, count: model.indices.length, type: "SCALAR", normalized: false },
         { bufferView: 1, byteOffset: 0, componentType: 5126, count: model.vertexs.length / 3, type: "VEC3", normalized: false, max, min },
