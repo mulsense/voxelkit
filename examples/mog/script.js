@@ -9,7 +9,6 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import voxelkit from 'voxelkit';
-let testpromise;
 
 xnew('#main', Main);
 
@@ -38,8 +37,8 @@ function Main(main) {
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
-  main.off('-update');
-  main.on('-update', () => { 
+  main.off('update');
+  main.on('update', () => { 
     composer.render();
   });
 
@@ -52,8 +51,10 @@ function ThreeMain(unit) {
   xnew(AmbientLight);
   xnew(Ground, { size: 100, color: 0xF8F8FF });
 
-  xnew.promise(voxelkit.load('./model.mog')).then((composits) => voxelkit.convertVRM(composits[0]))
-  .then((arrayBuffer) => {
+  xnew.promise(voxelkit.load('./model.mog')).then((composits) => voxelkit.convertVRM(composits[0]));
+
+
+  xnew.then(([arrayBuffer]) => {
       xnew(Test, { arrayBuffer, position: { x: 0, y: 0, z: 0 } });
     for (let i = 0; i < 10; i++) {
       const x = Math.random() * 6 - 3;
@@ -112,19 +113,19 @@ function Controller(unit) {
   pointer.on('-gesturestart', () => isActive = true);
   pointer.on('-gestureend', () => isActive = false);
   pointer.on('-gesturemove', ({ scale }) => {
-    unit.emit('+scale', { scale })
+    xnew.emit('+scale', { scale })
   });
 
   pointer.on('-dragmove', ({ event, delta }) => {
     if (isActive === true) return;
     if (event.buttons & 1 || !event.buttons) {
-      unit.emit('+rotate', { move: { x: +delta.x, y: +delta.y } });
+      xnew.emit('+rotate', { move: { x: +delta.x, y: +delta.y } });
     }
     if (event.buttons & 2) {
-      unit.emit('+translate', { move: { x: -delta.x, y: +delta.y } });
+      xnew.emit('+translate', { move: { x: -delta.x, y: +delta.y } });
     }
   });
-  pointer.on('-wheel', ({ delta }) => unit.emit('+scale', { scale: 1 + 0.001 * delta.y }));
+  pointer.on('-wheel', ({ delta }) => xnew.emit('+scale', { scale: 1 + 0.001 * delta.y }));
 }
 
 function Test(unit, { arrayBuffer, position }) {
@@ -161,7 +162,7 @@ function Test(unit, { arrayBuffer, position }) {
 
     // if (id % 100 > 0) return;
     let count = 8;
-    unit.on('-update', () => {
+    unit.on('update', () => {
       const t = (count + random) * 0.03;
       neck.rotation.x = Math.sin(t * 6) * +0.1;
       chest.rotation.x = Math.sin(t * 12) * +0.1;

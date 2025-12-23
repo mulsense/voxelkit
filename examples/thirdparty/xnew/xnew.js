@@ -209,7 +209,7 @@
     //----------------------------------------------------------------------------------------------------
     // utils
     //----------------------------------------------------------------------------------------------------
-    const SYSTEM_EVENTS = ['-start', '-update', '-stop', '-finalize'];
+    const SYSTEM_EVENTS = ['start', 'update', 'stop', 'finalize'];
     //----------------------------------------------------------------------------------------------------
     // unit
     //----------------------------------------------------------------------------------------------------
@@ -262,9 +262,6 @@
         get element() {
             return this._.currentElement;
         }
-        get components() {
-            return this._.components;
-        }
         start() {
             this._.tostart = true;
         }
@@ -287,6 +284,7 @@
             Unit.initialize(this, anchor);
         }
         static initialize(unit, anchor) {
+            var _a, _b;
             const backup = Unit.current;
             Unit.current = unit;
             unit._ = Object.assign(unit._, {
@@ -295,13 +293,15 @@
                 anchor,
                 state: 'invoked',
                 tostart: true,
+                protected: false,
+                ancestors: [...(unit._.parent ? [unit._.parent] : []), ...((_b = (_a = unit._.parent) === null || _a === void 0 ? void 0 : _a._.ancestors) !== null && _b !== void 0 ? _b : [])],
                 children: [],
                 elements: [],
                 promises: [],
                 components: [],
                 listeners: new MapMap(),
                 defines: {},
-                systems: { '-start': [], '-update': [], '-stop': [], '-finalize': [] },
+                systems: { start: [], update: [], stop: [], finalize: [] },
             });
             // nest html element
             if (typeof unit._.target === 'string') {
@@ -310,14 +310,14 @@
             // setup component
             Unit.extend(unit, unit._.baseComponent, unit._.props);
             // whether the unit promise was resolved
-            Promise.all(unit._.promises).then(() => unit._.state = 'initialized');
+            Promise.all(unit._.promises.map(p => p.promise)).then(() => unit._.state = 'initialized');
             Unit.current = backup;
         }
         static finalize(unit) {
             if (unit._.state !== 'finalized' && unit._.state !== 'finalizing') {
                 unit._.state = 'finalizing';
                 unit._.children.forEach((child) => child.finalize());
-                unit._.systems['-finalize'].forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
+                unit._.systems.finalize.forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
                 unit.off();
                 unit._.components.forEach((component) => Unit.component2units.delete(component, unit));
                 if (unit._.elements.length > 0) {
@@ -394,7 +394,7 @@
             if (unit._.state === 'initialized' || unit._.state === 'stopped') {
                 unit._.state = 'started';
                 unit._.children.forEach((child) => Unit.start(child));
-                unit._.systems['-start'].forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
+                unit._.systems.start.forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
             }
             else if (unit._.state === 'started') {
                 unit._.children.forEach((child) => Unit.start(child));
@@ -404,13 +404,13 @@
             if (unit._.state === 'started') {
                 unit._.state = 'stopped';
                 unit._.children.forEach((child) => Unit.stop(child));
-                unit._.systems['-stop'].forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
+                unit._.systems.stop.forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
             }
         }
         static update(unit) {
             if (unit._.state === 'started') {
                 unit._.children.forEach((child) => Unit.update(child));
-                unit._.systems['-update'].forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
+                unit._.systems.update.forEach((listener) => Unit.scope(Unit.snapshot(unit), listener));
             }
         }
         static reset() {
@@ -501,16 +501,20 @@
                 }
             });
         }
-        emit(type, ...args) {
+        static emit(type, ...args) {
             var _a, _b;
+            const current = Unit.current;
             if (type[0] === '+') {
                 (_a = Unit.type2units.get(type)) === null || _a === void 0 ? void 0 : _a.forEach((unit) => {
                     var _a;
-                    (_a = unit._.listeners.get(type)) === null || _a === void 0 ? void 0 : _a.forEach((item) => item.execute(...args));
+                    const find = [unit, ...unit._.ancestors].find(u => u._.protected === true);
+                    if (find === undefined || current._.ancestors.includes(find) === true || current === find) {
+                        (_a = unit._.listeners.get(type)) === null || _a === void 0 ? void 0 : _a.forEach((item) => item.execute(...args));
+                    }
                 });
             }
             else if (type[0] === '-') {
-                (_b = this._.listeners.get(type)) === null || _b === void 0 ? void 0 : _b.forEach((item) => item.execute(...args));
+                (_b = current._.listeners.get(type)) === null || _b === void 0 ? void 0 : _b.forEach((item) => item.execute(...args));
             }
         }
     }
@@ -567,7 +571,7 @@
             }
             else if (timer.stack.length === 0) {
                 timer.stack.push(Object.assign({ snapshot: Unit.snapshot(Unit.current) }, options));
-                timer.unit.on('-finalize', () => { UnitTimer.next(timer); });
+                timer.unit.on('finalize', () => { UnitTimer.next(timer); });
             }
             else {
                 timer.stack.push(Object.assign({ snapshot: Unit.snapshot(Unit.current) }, options));
@@ -576,7 +580,7 @@
         static next(timer) {
             if (timer.stack.length > 0) {
                 timer.unit = new Unit(Unit.current, UnitTimer.Component, timer.stack.shift());
-                timer.unit.on('-finalize', () => { UnitTimer.next(timer); });
+                timer.unit.on('finalize', () => { UnitTimer.next(timer); });
             }
         }
         static Component(unit, options) {
@@ -597,7 +601,7 @@
                     counter++;
                 }, duration: options.duration, iterations: options.iterations, easing: options.easing
             });
-            unit.on('-finalize', () => timer.clear());
+            unit.on('finalize', () => timer.clear());
         }
     }
 
@@ -673,8 +677,8 @@
          */
         promise(promise) {
             try {
-                Unit.current._.promises.push(promise);
-                return new UnitPromise(promise);
+                Unit.current._.promises.push(new UnitPromise(promise));
+                return Unit.current._.promises[Unit.current._.promises.length - 1];
             }
             catch (error) {
                 console.error('xnew.promise(promise: Promise<any>): ', error);
@@ -690,7 +694,7 @@
          */
         then(callback) {
             try {
-                return new UnitPromise(Promise.all(Unit.current._.promises)).then(callback);
+                return new UnitPromise(Promise.all(Unit.current._.promises.map(p => p.promise))).then(callback);
             }
             catch (error) {
                 console.error('xnew.then(callback: Function): ', error);
@@ -706,7 +710,7 @@
          */
         catch(callback) {
             try {
-                return new UnitPromise(Promise.all(Unit.current._.promises)).catch(callback);
+                return new UnitPromise(Promise.all(Unit.current._.promises.map(p => p.promise))).catch(callback);
             }
             catch (error) {
                 console.error('xnew.catch(callback: Function): ', error);
@@ -722,29 +726,10 @@
          */
         finally(callback) {
             try {
-                return new UnitPromise(Promise.all(Unit.current._.promises)).finally(callback);
+                return new UnitPromise(Promise.all(Unit.current._.promises.map(p => p.promise))).finally(callback);
             }
             catch (error) {
                 console.error('xnew.finally(callback: Function): ', error);
-                throw error;
-            }
-        },
-        /**
-         * Fetches a resource and registers the promise with the current component
-         * @param url - URL to fetch
-         * @param options - Optional fetch options (method, headers, body, etc.)
-         * @returns UnitPromise wrapping the fetch promise
-         * @example
-         * xnew.fetch('/api/users').then(res => res.json()).then(data => console.log(data))
-         */
-        fetch(url, options) {
-            try {
-                const promise = fetch(url, options);
-                Unit.current._.promises.push(promise);
-                return new UnitPromise(promise);
-            }
-            catch (error) {
-                console.error('xnew.promise(url: string, options?: object): ', error);
                 throw error;
             }
         },
@@ -776,6 +761,15 @@
             }
             catch (error) {
                 console.error('xnew.find(component: Function): ', error);
+                throw error;
+            }
+        },
+        emit(type, ...args) {
+            try {
+                return Unit.emit(type, ...args);
+            }
+            catch (error) {
+                console.error('xnew.emit(type: string, ...args: any[]): ', error);
                 throw error;
             }
         },
@@ -819,11 +813,17 @@
         transition(transition, duration = 0, easing = 'linear') {
             return new UnitTimer({ transition, duration, easing, iterations: 1 });
         },
+        protect() {
+            Unit.current._.protected = true;
+        }
     });
 
     function AccordionFrame(frame, { open = false, duration = 200, easing = 'ease' } = {}) {
         const internal = xnew$1((internal) => {
-            return { frame, open, rate: 0.0, };
+            return {
+                frame, open, rate: 0.0,
+                emit(type, ...args) { xnew$1.emit(type, ...args); }
+            };
         });
         xnew$1.context('xnew.accordionframe', internal);
         internal.on('-transition', ({ rate }) => internal.rate = rate);
@@ -900,12 +900,12 @@
     }
 
     function ResizeEvent(resize) {
-        const observer = new ResizeObserver((entries) => {
+        const observer = new ResizeObserver(xnew$1.scope((entries) => {
             for (const entry of entries) {
-                resize.emit('-resize');
+                xnew$1.emit('-resize');
                 break;
             }
-        });
+        }));
         if (resize.element) {
             observer.observe(resize.element);
         }
@@ -917,42 +917,57 @@
     }
     function KeyboardEvent(keyboard) {
         const state = {};
+        const keydown = xnew$1.scope((event) => {
+            state[event.code] = 1;
+            xnew$1.emit('-keydown', { event, type: '-keydown', code: event.code });
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
+                xnew$1.emit('-keydown:arrow', { event, type: '-keydown:arrow', code: event.code, vector: getVector() });
+            }
+        });
+        const keyup = xnew$1.scope((event) => {
+            state[event.code] = 0;
+            xnew$1.emit('-keyup', { event, type: '-keyup', code: event.code });
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
+                xnew$1.emit('-keyup:arrow', { event, type: '-keyup:arrow', code: event.code, vector: getVector() });
+            }
+        });
         window.addEventListener('keydown', keydown);
         window.addEventListener('keyup', keyup);
-        function keydown(event) {
-            state[event.code] = 1;
-            keyboard.emit('-keydown', { event, type: '-keydown', code: event.code });
-            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
-                keyboard.emit('-keydown:arrow', { event, type: '-keydown:arrow', code: event.code, vector: getVector() });
-            }
-        }
-        function keyup(event) {
-            state[event.code] = 0;
-            keyboard.emit('-keyup', { event, type: '-keyup', code: event.code });
-            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
-                keyboard.emit('-keyup:arrow', { event, type: '-keyup:arrow', code: event.code, vector: getVector() });
-            }
-        }
+        keyboard.on('-finalize', () => {
+            window.removeEventListener('keydown', keydown);
+            window.removeEventListener('keyup', keyup);
+        });
         function getVector() {
             return {
                 x: (state['ArrowLeft'] ? -1 : 0) + (state['ArrowRight'] ? +1 : 0),
                 y: (state['ArrowUp'] ? -1 : 0) + (state['ArrowDown'] ? +1 : 0)
             };
         }
-        keyboard.on('-finalize', () => {
-            window.removeEventListener('keydown', keydown);
-            window.removeEventListener('keyup', keyup);
-        });
     }
     function PointerEvent(unit) {
         const internal = xnew$1();
-        internal.on('pointerdown', (event) => unit.emit('-pointerdown', { event, position: getPosition(unit.element, event) }));
-        internal.on('pointermove', (event) => unit.emit('-pointermove', { event, position: getPosition(unit.element, event) }));
-        internal.on('pointerup', (event) => unit.emit('-pointerup', { event, position: getPosition(unit.element, event) }));
-        internal.on('wheel', (event) => unit.emit('-wheel', { event, delta: { x: event.wheelDeltaX, y: event.wheelDeltaY } }));
-        internal.on('click', (event) => unit.emit('-click', { event, position: getPosition(unit.element, event) }));
-        internal.on('pointerover', (event) => unit.emit('-pointerover', { event, position: getPosition(unit.element, event) }));
-        internal.on('pointerout', (event) => unit.emit('-pointerout', { event, position: getPosition(unit.element, event) }));
+        internal.on('pointerdown', (event) => xnew$1.emit('-pointerdown', { event, position: getPosition(unit.element, event) }));
+        internal.on('pointermove', (event) => xnew$1.emit('-pointermove', { event, position: getPosition(unit.element, event) }));
+        internal.on('pointerup', (event) => xnew$1.emit('-pointerup', { event, position: getPosition(unit.element, event) }));
+        internal.on('wheel', (event) => xnew$1.emit('-wheel', { event, delta: { x: event.wheelDeltaX, y: event.wheelDeltaY } }));
+        internal.on('click', (event) => xnew$1.emit('-click', { event, position: getPosition(unit.element, event) }));
+        internal.on('pointerover', (event) => xnew$1.emit('-pointerover', { event, position: getPosition(unit.element, event) }));
+        internal.on('pointerout', (event) => xnew$1.emit('-pointerout', { event, position: getPosition(unit.element, event) }));
+        const pointerdownoutside = xnew$1.scope((event) => {
+            if (unit.element.contains(event.target) === false) {
+                xnew$1.emit('-pointerdown:outside', { event, position: getPosition(unit.element, event) });
+            }
+        });
+        const pointerupoutside = xnew$1.scope((event) => {
+            if (unit.element.contains(event.target) === false) {
+                xnew$1.emit('-pointerup:outside', { event, position: getPosition(unit.element, event) });
+            }
+        });
+        const clickoutside = xnew$1.scope((event) => {
+            if (unit.element.contains(event.target) === false) {
+                xnew$1.emit('-click:outside', { event, position: getPosition(unit.element, event) });
+            }
+        });
         document.addEventListener('pointerdown', pointerdownoutside);
         document.addEventListener('pointerup', pointerupoutside);
         document.addEventListener('click', clickoutside);
@@ -961,77 +976,60 @@
             document.removeEventListener('pointerup', pointerupoutside);
             document.removeEventListener('click', clickoutside);
         });
-        function pointerdownoutside(event) {
-            if (unit.element.contains(event.target) === false) {
-                unit.emit('-pointerdown:outside', { event, position: getPosition(unit.element, event) });
-            }
-        }
-        function pointerupoutside(event) {
-            if (unit.element.contains(event.target) === false) {
-                unit.emit('-pointerup:outside', { event, position: getPosition(unit.element, event) });
-            }
-        }
-        function clickoutside(event) {
-            if (unit.element.contains(event.target) === false) {
-                unit.emit('-click:outside', { event, position: getPosition(unit.element, event) });
-            }
-        }
         const drag = xnew$1(DragEvent);
-        drag.on('-dragstart', (...args) => unit.emit('-dragstart', ...args));
-        drag.on('-dragmove', (...args) => unit.emit('-dragmove', ...args));
-        drag.on('-dragend', (...args) => unit.emit('-dragend', ...args));
-        drag.on('-dragcancel', (...args) => unit.emit('-dragcancel', ...args));
+        drag.on('-dragstart', (...args) => xnew$1.emit('-dragstart', ...args));
+        drag.on('-dragmove', (...args) => xnew$1.emit('-dragmove', ...args));
+        drag.on('-dragend', (...args) => xnew$1.emit('-dragend', ...args));
+        drag.on('-dragcancel', (...args) => xnew$1.emit('-dragcancel', ...args));
         const gesture = xnew$1(GestureEvent);
-        gesture.on('-gesturestart', (...args) => unit.emit('-gesturestart', ...args));
-        gesture.on('-gesturemove', (...args) => unit.emit('-gesturemove', ...args));
-        gesture.on('-gestureend', (...args) => unit.emit('-gestureend', ...args));
-        gesture.on('-gesturecancel', (...args) => unit.emit('-gesturecancel', ...args));
+        gesture.on('-gesturestart', (...args) => xnew$1.emit('-gesturestart', ...args));
+        gesture.on('-gesturemove', (...args) => xnew$1.emit('-gesturemove', ...args));
+        gesture.on('-gestureend', (...args) => xnew$1.emit('-gestureend', ...args));
+        gesture.on('-gesturecancel', (...args) => xnew$1.emit('-gesturecancel', ...args));
     }
     function DragEvent(unit) {
-        unit.on('pointerdown', pointerdown);
-        function pointerdown(event) {
+        const pointerdown = xnew$1.scope((event) => {
             const id = event.pointerId;
             const position = getPosition(unit.element, event);
             let previous = position;
-            xnew$1((internal) => {
-                let connect = true;
-                window.addEventListener('pointermove', pointermove);
-                window.addEventListener('pointerup', pointerup);
-                window.addEventListener('pointercancel', pointercancel);
-                function pointermove(event) {
-                    if (event.pointerId === id) {
-                        const position = getPosition(unit.element, event);
-                        const delta = { x: position.x - previous.x, y: position.y - previous.y };
-                        unit.emit('-dragmove', { event, position, delta });
-                        previous = position;
-                    }
+            let connect = true;
+            const pointermove = xnew$1.scope((event) => {
+                if (event.pointerId === id) {
+                    const position = getPosition(unit.element, event);
+                    const delta = { x: position.x - previous.x, y: position.y - previous.y };
+                    xnew$1.emit('-dragmove', { event, position, delta });
+                    previous = position;
                 }
-                function pointerup(event) {
-                    if (event.pointerId === id) {
-                        const position = getPosition(unit.element, event);
-                        unit.emit('-dragend', { event, position, });
-                        remove();
-                    }
-                }
-                function pointercancel(event) {
-                    if (event.pointerId === id) {
-                        const position = getPosition(unit.element, event);
-                        unit.emit('-dragcancel', { event, position, });
-                        remove();
-                    }
-                }
-                function remove() {
-                    if (connect === true) {
-                        window.removeEventListener('pointermove', pointermove);
-                        window.removeEventListener('pointerup', pointerup);
-                        window.removeEventListener('pointercancel', pointercancel);
-                        connect = false;
-                    }
-                }
-                internal.on('-finalize', remove);
             });
-            unit.emit('-dragstart', { event, position });
-        }
+            const pointerup = xnew$1.scope((event) => {
+                if (event.pointerId === id) {
+                    const position = getPosition(unit.element, event);
+                    xnew$1.emit('-dragend', { event, position, });
+                    remove();
+                }
+            });
+            const pointercancel = xnew$1.scope((event) => {
+                if (event.pointerId === id) {
+                    const position = getPosition(unit.element, event);
+                    xnew$1.emit('-dragcancel', { event, position, });
+                    remove();
+                }
+            });
+            window.addEventListener('pointermove', pointermove);
+            window.addEventListener('pointerup', pointerup);
+            window.addEventListener('pointercancel', pointercancel);
+            function remove() {
+                if (connect === true) {
+                    window.removeEventListener('pointermove', pointermove);
+                    window.removeEventListener('pointerup', pointerup);
+                    window.removeEventListener('pointercancel', pointercancel);
+                    connect = false;
+                }
+            }
+            xnew$1((unit) => unit.on('-finalize', remove));
+            xnew$1.emit('-dragstart', { event, position });
+        });
+        unit.on('pointerdown', pointerdown);
     }
     function GestureEvent(unit) {
         const drag = xnew$1(DragEvent);
@@ -1041,7 +1039,7 @@
             map.set(event.pointerId, Object.assign({}, position));
             isActive = map.size === 2 ? true : false;
             if (isActive === true) {
-                unit.emit('-gesturestart', {});
+                xnew$1.emit('-gesturestart', {});
             }
         });
         drag.on('-dragmove', ({ event, position, delta }) => {
@@ -1067,20 +1065,20 @@
                 //         rotate = sign > 0.0 ? +angle : -angle;
                 //     }
                 // }
-                unit.emit('-gesturemove', { event, position, delta, scale });
+                xnew$1.emit('-gesturemove', { event, position, delta, scale });
             }
             map.set(event.pointerId, position);
         });
         drag.on('-dragend', ({ event }) => {
             if (isActive === true) {
-                unit.emit('-gestureend', {});
+                xnew$1.emit('-gestureend', {});
             }
             isActive = false;
             map.delete(event.pointerId);
         });
         drag.on('-dragcancel', ({ event }) => {
             if (isActive === true) {
-                unit.emit('-gesturecancel', { event });
+                xnew$1.emit('-gesturecancel', { event });
             }
             isActive = false;
             map.delete(event.pointerId);
@@ -1147,7 +1145,9 @@
 
     function ModalFrame(frame, { duration = 200, easing = 'ease' } = {}) {
         const internal = xnew$1((internal) => {
-            return {};
+            return {
+                emit(type, ...args) { xnew$1.emit(type, ...args); }
+            };
         });
         xnew$1.context('xnew.modalframe', internal);
         xnew$1.nest('<div style="position: fixed; inset: 0; z-index: 1000;">');
@@ -1180,7 +1180,10 @@
         const internal = xnew$1((internal) => {
             const buttons = new Map();
             const contents = new Map();
-            return { frame, buttons, contents };
+            return {
+                frame, buttons, contents,
+                emit(type, ...args) { xnew$1.emit(type, ...args); }
+            };
         });
         xnew$1.context('xnew.tabframe', internal);
         xnew$1.timeout(() => internal.emit('-select', { key: select !== null && select !== void 0 ? select : [...internal.buttons.keys()][0] }));
@@ -1279,30 +1282,24 @@
         ${fill ? `fill: ${fill}; fill-opacity: ${fillOpacity};` : ''}
     ">`);
     }
-    function AnalogStick(self, { size, stroke = 'currentColor', strokeOpacity = 0.8, strokeWidth = 2, strokeLinejoin = 'round', fill = '#FFF', fillOpacity = 0.8 } = {}) {
-        xnew$1.nest(`<div style="position: relative; width: 100%; height: 100%;">`);
-        let internal;
-        let newsize;
-        if (size) {
-            newsize = size;
-        }
-        else {
-            newsize = Math.min(self.element.clientWidth, self.element.clientHeight);
-            xnew$1(self.element, ResizeEvent).on('-resize', () => {
-                newsize = Math.min(self.element.clientWidth, self.element.clientHeight);
-                internal === null || internal === void 0 ? void 0 : internal.reboot();
+    function AnalogStick(unit, { stroke = 'currentColor', strokeOpacity = 0.8, strokeWidth = 2, strokeLinejoin = 'round', fill = '#FFF', fillOpacity = 0.8 } = {}) {
+        const outer = xnew$1.nest(`<div style="position: relative; width: 100%; height: 100%;">`);
+        const internal = xnew$1((unit) => {
+            let newsize = Math.min(outer.clientWidth, outer.clientHeight);
+            const inner = xnew$1.nest(`<div style="position: absolute; width: ${newsize}px; height: ${newsize}px; margin: auto; inset: 0; cursor: pointer; pointer-select: none; pointer-events: auto; overflow: hidden;">`);
+            xnew$1(outer, ResizeEvent).on('-resize', () => {
+                newsize = Math.min(outer.clientWidth, outer.clientHeight);
+                inner.style.width = `${newsize}px`;
+                inner.style.height = `${newsize}px`;
             });
-        }
-        internal = xnew$1(() => {
-            xnew$1.nest(`<div style="position: absolute; width: ${newsize}px; height: ${newsize}px; margin: auto; inset: 0; cursor: pointer; pointer-select: none; pointer-events: auto; overflow: hidden;">`);
-            xnew$1((self) => {
+            xnew$1((unit) => {
                 xnew$1.extend(SVGTemplate, { fill, fillOpacity, stroke, strokeOpacity, strokeWidth, strokeLinejoin });
                 xnew$1('<polygon points="50  7 40 18 60 18">');
                 xnew$1('<polygon points="50 93 40 83 60 83">');
                 xnew$1('<polygon points=" 7 50 18 40 18 60">');
                 xnew$1('<polygon points="93 50 83 40 83 60">');
             });
-            const target = xnew$1((self) => {
+            const target = xnew$1((unit) => {
                 xnew$1.extend(SVGTemplate, { fill, fillOpacity, stroke, strokeOpacity, strokeWidth, strokeLinejoin });
                 xnew$1('<circle cx="50" cy="50" r="23">');
             });
@@ -1312,21 +1309,21 @@
                 target.element.style.filter = 'brightness(90%)';
                 target.element.style.left = vector.x * newsize / 4 + 'px';
                 target.element.style.top = vector.y * newsize / 4 + 'px';
-                self.emit('-down', { vector });
+                xnew$1.emit('-down', { vector });
             });
             pointer.on('-dragmove', ({ event, position }) => {
                 const vector = getVector(position);
                 target.element.style.filter = 'brightness(90%)';
                 target.element.style.left = vector.x * newsize / 4 + 'px';
                 target.element.style.top = vector.y * newsize / 4 + 'px';
-                self.emit('-move', { vector });
+                xnew$1.emit('-move', { vector });
             });
             pointer.on('-dragend', ({ event }) => {
                 const vector = { x: 0, y: 0 };
                 target.element.style.filter = '';
                 target.element.style.left = vector.x * newsize / 4 + 'px';
                 target.element.style.top = vector.y * newsize / 4 + 'px';
-                self.emit('-up', { vector });
+                xnew$1.emit('-up', { vector });
             });
             function getVector(position) {
                 const x = position.x - newsize / 2;
@@ -1336,23 +1333,20 @@
                 return { x: Math.cos(a) * d, y: Math.sin(a) * d };
             }
         });
+        internal.on('-down', (...args) => xnew$1.emit('-down', ...args));
+        internal.on('-move', (...args) => xnew$1.emit('-move', ...args));
+        internal.on('-up', (...args) => xnew$1.emit('-up', ...args));
     }
-    function DirectionalPad(self, { size, diagonal = true, stroke = 'currentColor', strokeOpacity = 0.8, strokeWidth = 2, strokeLinejoin = 'round', fill = '#FFF', fillOpacity = 0.8 } = {}) {
-        xnew$1.nest(`<div style="position: relative; width: 100%; height: 100%;">`);
-        let internal;
-        let newsize;
-        if (size) {
-            newsize = size;
-        }
-        else {
-            newsize = Math.min(self.element.clientWidth, self.element.clientHeight);
-            xnew$1(self.element, ResizeEvent).on('-resize', () => {
-                newsize = Math.min(self.element.clientWidth, self.element.clientHeight);
-                internal === null || internal === void 0 ? void 0 : internal.reboot();
+    function DirectionalPad(unit, { diagonal = true, stroke = 'currentColor', strokeOpacity = 0.8, strokeWidth = 2, strokeLinejoin = 'round', fill = '#FFF', fillOpacity = 0.8 } = {}) {
+        const outer = xnew$1.nest(`<div style="position: relative; width: 100%; height: 100%;">`);
+        const internal = xnew$1((unit) => {
+            let newsize = Math.min(outer.clientWidth, outer.clientHeight);
+            const inner = xnew$1.nest(`<div style="position: absolute; width: ${newsize}px; height: ${newsize}px; margin: auto; inset: 0; cursor: pointer; pointer-select: none; pointer-events: auto; overflow: hidden;">`);
+            xnew$1(outer, ResizeEvent).on('-resize', () => {
+                newsize = Math.min(outer.clientWidth, outer.clientHeight);
+                inner.style.width = `${newsize}px`;
+                inner.style.height = `${newsize}px`;
             });
-        }
-        internal = xnew$1(() => {
-            xnew$1.nest(`<div style="position: absolute; width: ${newsize}px; height: ${newsize}px; margin: auto; inset: 0; cursor: pointer; pointer-select: none; pointer-events: auto; overflow: hidden;">`);
             const polygons = [
                 '<polygon points="50 50 35 35 35  5 37  3 63  3 65  5 65 35">',
                 '<polygon points="50 50 35 65 35 95 37 97 63 97 65 95 65 65">',
@@ -1360,12 +1354,12 @@
                 '<polygon points="50 50 65 35 95 35 97 37 97 63 95 65 65 65">'
             ];
             const targets = polygons.map((polygon) => {
-                return xnew$1((self) => {
+                return xnew$1((unit) => {
                     xnew$1.extend(SVGTemplate, { stroke: 'none', fill, fillOpacity });
                     xnew$1(polygon);
                 });
             });
-            xnew$1((self) => {
+            xnew$1((unit) => {
                 xnew$1.extend(SVGTemplate, { fill: 'none', stroke, strokeOpacity, strokeWidth, strokeLinejoin });
                 xnew$1('<polyline points="35 35 35  5 37  3 63  3 65  5 65 35">');
                 xnew$1('<polyline points="35 65 35 95 37 97 63 97 65 95 65 65">');
@@ -1383,7 +1377,7 @@
                 targets[1].element.style.filter = (vector.y > 0) ? 'brightness(90%)' : '';
                 targets[2].element.style.filter = (vector.x < 0) ? 'brightness(90%)' : '';
                 targets[3].element.style.filter = (vector.x > 0) ? 'brightness(90%)' : '';
-                self.emit('-down', { vector });
+                xnew$1.emit('-down', { vector });
             });
             pointer.on('-dragmove', ({ event, position }) => {
                 const vector = getVector(position);
@@ -1391,7 +1385,7 @@
                 targets[1].element.style.filter = (vector.y > 0) ? 'brightness(90%)' : '';
                 targets[2].element.style.filter = (vector.x < 0) ? 'brightness(90%)' : '';
                 targets[3].element.style.filter = (vector.x > 0) ? 'brightness(90%)' : '';
-                self.emit('-move', { vector });
+                xnew$1.emit('-move', { vector });
             });
             pointer.on('-dragend', ({ event }) => {
                 const vector = { x: 0, y: 0 };
@@ -1399,7 +1393,7 @@
                 targets[1].element.style.filter = '';
                 targets[2].element.style.filter = '';
                 targets[3].element.style.filter = '';
-                self.emit('-up', { vector });
+                xnew$1.emit('-up', { vector });
             });
             function getVector(position) {
                 const x = position.x - newsize / 2;
@@ -1422,6 +1416,9 @@
                 return vector;
             }
         });
+        internal.on('-down', (...args) => xnew$1.emit('-down', ...args));
+        internal.on('-move', (...args) => xnew$1.emit('-move', ...args));
+        internal.on('-up', (...args) => xnew$1.emit('-up', ...args));
     }
 
     function TextStream(unit, { text = '', speed = 50, fade = 300 } = {}) {
@@ -1460,11 +1457,11 @@
                 for (let i = 0; i < chars.length; i++) {
                     chars[i].element.style.opacity = '1';
                 }
-                unit.emit('-complete');
+                xnew$1.emit('-complete');
             }
             else if (state === 1) {
                 state = 2;
-                unit.emit('-next');
+                xnew$1.emit('-next');
             }
         }
     }
