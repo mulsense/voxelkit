@@ -13,19 +13,16 @@ import voxelkit from 'voxelkit';
 
 xnew('#main', Main);
 
-function Main(main) {
-  xnew.extend(xnew.basics.Screen, { width: 800, height: 800 });
+function Main(unit, { mogPath = './teto.mog', vrmaPath = './VRMA_07.vrma', size = 512 } = {}) {
+  xnew.protect();
+  xnew.extend(xnew.basics.Screen, { width: size, height: size });
 
   // three setup
-  xthree.initialize({ canvas: main.canvas });
+  const camera = new THREE.OrthographicCamera(-0.5, +0.5, +0.5, -0.5, 0, 10);
+  xthree.initialize({ canvas: unit.canvas, camera });
+  xthree.camera.position.set(0, 0.2, +2);
   xthree.renderer.shadowMap.enabled = true;
   xthree.renderer.shadowMap.type = THREE.PCFShadowMap;
-  xthree.scene.background = new THREE.Color(0xe0e0f0);
-  xthree.scene.fog = new THREE.Fog(0xe0e0f0, 10, 30);
-  xthree.camera.position.set(0, 0, +2);
-  xthree.scene.rotation.x = -60 / 180 * Math.PI
-
-  xthree.camera.position.set(0, 0.4, +2);
   xthree.scene.rotation.x = -60 / 180 * Math.PI
   xthree.scene.rotation.z = -20 / 180 * Math.PI
 
@@ -38,44 +35,15 @@ function Main(main) {
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
-  main.off('update');
-  main.on('update', () => { 
-    composer.render();
-  });
+  unit.off('update');
+  unit.on('update', () => composer.render());
 
-  xnew(ThreeMain);
-  xnew(Controller);
-}
-
-function ThreeMain(unit) {
   xnew(DirectionaLight, { x: 1, y: -1, z: 2 });
   xnew(AmbientLight);
-  xnew(Ground, { size: 100, color: 0xF8F8FF });
+  xnew(Ground);
+  xnew(Controller);
 
-  xnew.promise(voxelkit.load('./teto.mog')).then((composits) => voxelkit.convertVRM(composits[0]));
-
-  xnew.promise(new Promise((resolve) => {
-    const loader = new GLTFLoader();
-    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));  
-    loader.load('./VRMA_07.vrma', (gltf) => {
-      resolve(gltf.userData.vrmAnimations[0]);
-    });
-  }));
-  xnew.then(([arrayBuffer, vrma]) => {
-    const url = URL.createObjectURL(new Blob([arrayBuffer], { type: 'application/octet-stream' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'test.vrm';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    xnew(Test, { arrayBuffer, vrma, position: { x: 0, y: 0, z: 0 } });
-    // for (let i = 0; i < 100; i++) {
-    //   const x = Math.random() * 6 - 3;
-    //   const y = Math.random() * 6 - 3;
-    //   xnew(Test, { arrayBuffer, vrma, position: { x: x, y: y, z: 0 } });
-    // }
-  });
+  xnew(Model, { mogPath, vrmaPath, position: { x: 0, y: 0, z: 0 } }); // placeholder
 
   unit.on('+scale', ({ scale }) => {
     xthree.camera.position.z /= scale;
@@ -94,18 +62,8 @@ function DirectionaLight(unit, { x, y, z }) {
   const object = xthree.nest(new THREE.DirectionalLight(0xFFFFFF, 1.4));
   object.position.set(x, y, z);
   object.castShadow = true;
-
-  const s = object.position.length();
-  object.castShadow = true;
   object.shadow.mapSize.width = 2048;
   object.shadow.mapSize.height = 2048;
-  object.shadow.camera.left = -s * 1.0;
-  object.shadow.camera.right = +s * 1.0;
-  object.shadow.camera.top = -s * 1.0;
-  object.shadow.camera.bottom = +s * 1.0;
-  object.shadow.camera.near = +s * 0.1;
-  object.shadow.camera.far = +s * 10.0;
-  object.shadow.camera.updateProjectionMatrix();
 }
 
 function AmbientLight(unit) {
@@ -114,9 +72,9 @@ function AmbientLight(unit) {
 
 function Ground(unit) {
   const geometry = new THREE.PlaneGeometry(100, 100);
-  const material = new THREE.MeshPhongMaterial({ color: 0xffffff, depthWrite: true });
-  const object = xthree.nest(new THREE.Mesh(geometry, material));
-  object.receiveShadow = true;
+  const material = new THREE.ShadowMaterial({ opacity: 0.20 });
+  const plane = xthree.nest(new THREE.Mesh(geometry, material));
+  plane.receiveShadow = true;
 }
 
 function Controller(unit) {
@@ -142,19 +100,38 @@ function Controller(unit) {
   pointer.on('-wheel', ({ delta }) => xnew.emit('+scale', { scale: 1 + 0.001 * delta.y }));
 }
 
-function Test(unit, { arrayBuffer, vrma, position }) {
+function Model(unit, { mogPath, vrmaPath, position }) {
   const object = xthree.nest(new THREE.Object3D());
-  
+  object.rotation.x = Math.PI / 2;
+  object.position.set(position.x, position.y, position.z);
+
+  const loadStartTime = performance.now();
+  xnew.promise(voxelkit.load(mogPath))
+  .then((composits) => {
+    const loadEndTime = performance.now();
+    console.log(`voxelkit.load() took ${(loadEndTime - loadStartTime).toFixed(2)} ms`);
+    xthree.camera.position.y = composits[0].dsize[1] * 20 * 0.001 * 0.3;
+    xthree.camera.zoom = 1 / ((composits[0].dsize[0] + composits[0].dsize[1] + composits[0].dsize[1]) / 3 / 32);
+    xthree.camera.updateProjectionMatrix();
+    return voxelkit.convertVRM(composits[0]);
+  })
+  .then((arrayBuffer) => {
+    return new Promise((resolve) => {
+      const loader = new GLTFLoader();
+      loader.register((parser) => new VRMLoaderPlugin(parser));
+      loader.parse(arrayBuffer.buffer, '', (gltf) => resolve(gltf.userData.vrm), (error) => {
+        console.error('Failed to load VRM:', error);
+      });
+    });
+  });
+
   xnew.promise(new Promise((resolve) => {
     const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
-    loader.parse(arrayBuffer.buffer, '', (gltf) => {
-      resolve(gltf);
-    }, (error) => {
-      console.error('Failed to load VRM:', error);
-    });
-  })).then((gltf) => {
-    const vrm = gltf.userData.vrm;
+    loader.register((parser) => new VRMAnimationLoaderPlugin(parser));  
+    loader.load(vrmaPath, (gltf) => resolve(gltf.userData.vrmAnimations[0]));
+  }));
+
+  xnew.then(([vrm, vrma]) => {
     vrm.scene.traverse((obj) => {
       if (obj.isMesh) {
         obj.castShadow = true;
@@ -162,19 +139,16 @@ function Test(unit, { arrayBuffer, vrma, position }) {
       }
     });
     const scene = vrm.scene;
-    scene.rotation.x = Math.PI / 2;
-    scene.position.set(position.x, position.y, position.z);
     object.add(scene);
 
     const mixer = new THREE.AnimationMixer(vrm.scene);
     const clip = createVRMAnimationClip(vrma, vrm);
-    const currentAction = mixer.clipAction(clip);
-    currentAction.setLoop(THREE.LoopRepeat);
-    currentAction.play();
+    const action = mixer.clipAction(clip);
+    action.setLoop(THREE.LoopRepeat);
+    action.play();
 
     let clock = new THREE.Clock();
     unit.on('update', () => {
-        
         const delta = clock.getDelta();
         mixer.update(delta);
         vrm.update(delta);

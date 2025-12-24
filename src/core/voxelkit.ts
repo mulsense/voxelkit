@@ -3,12 +3,12 @@ import { loadMOG } from './mog3d';
 import { convertVRM } from './vrm';
 
 export const voxelkit = {
-    load(path: string, options: { scale: number } = { scale: 1 / 32 }): any {
+    load(path: string, { scale = null }: { scale?: number | null } = {}): any {
         const extension = path.split('.').pop()?.toLowerCase();
 
         switch (extension) {
             case 'mog': {
-                return loadMOG(path, options.scale);
+                return loadMOG(path, scale);
             }
 
             // case 'vox':

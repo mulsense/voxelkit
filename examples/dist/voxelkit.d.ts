@@ -14,6 +14,7 @@ declare class Vec3 {
 interface Composit {
     models: Model[];
     bones: Bone[];
+    dsize: [number, number, number];
 }
 declare class Model {
     name: string;
@@ -36,8 +37,8 @@ declare class Bone {
 }
 
 declare const voxelkit: {
-    load(path: string, options?: {
-        scale: number;
+    load(path: string, { scale }?: {
+        scale?: number | null;
     }): any;
     convertVRM(composit: Composit): Promise<Uint8Array<ArrayBufferLike>>;
 };

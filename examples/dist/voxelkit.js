@@ -223,18 +223,19 @@
             const composits = [];
             for (const jsonmodel of json.models) {
                 const dsize = jsonmodel.dsize;
+                const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
                 const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
                 const models = jsonmodel.layers.map((jsonlayer) => {
-                    return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
+                    return decode(dsize, palette, jsonlayer.name, jsonlayer.map, s);
                 });
                 const bones = [];
                 for (const jsonbone of ((_a = jsonmodel.bones) !== null && _a !== void 0 ? _a : [])) {
                     const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null;
-                    const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), scale);
-                    const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), scale);
+                    const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), s);
+                    const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), s);
                     bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
                 }
-                composits.push({ models, bones });
+                composits.push({ models, bones, dsize });
             }
             return composits;
         });
@@ -643,12 +644,12 @@
     }
 
     const voxelkit = {
-        load(path, options = { scale: 1 / 32 }) {
+        load(path, { scale = null } = {}) {
             var _a;
             const extension = (_a = path.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
             switch (extension) {
                 case 'mog': {
-                    return loadMOG(path, options.scale);
+                    return loadMOG(path, scale);
                 }
                 // case 'vox':
                 //     return loadVoxFormat(path);

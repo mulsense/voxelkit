@@ -3,6 +3,7 @@ import { Vec3 } from './vector';
 export interface Composit {
     models: Model[];
     bones: Bone[];
+    dsize: [number, number, number];
 }
 
 export class Model {

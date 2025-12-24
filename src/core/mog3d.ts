@@ -2,26 +2,27 @@ import { segment, hmMakeTableFromLngs, table256, zlDecode } from './code';
 import { Vec3 } from './vector';
 import { Composit, Model, Bone } from './model';
 
-export async function loadMOG(path: string, scale: number): Promise<Composit[]> {
+export async function loadMOG(path: string, scale: number | null): Promise<Composit[]> {
     const response = await fetch(path);
     const json = await response.json();
     const composits: Composit[] = [];
     for (const jsonmodel of json.models) {
         const dsize = jsonmodel.dsize;
+        const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
         const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
 
         const models = jsonmodel.layers.map((jsonlayer: any) => {
-            return decode(dsize, palette, jsonlayer.name, jsonlayer.map, scale);
+            return decode(dsize, palette, jsonlayer.name, jsonlayer.map, s);
         });
 
         const bones: Bone[] = [];
         for(const jsonbone of (jsonmodel.bones ?? [])) {
             const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null
-            const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), scale);
-            const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), scale);
+            const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), s);
+            const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), s);
             bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
         }
-        composits.push({ models, bones });
+        composits.push({ models, bones, dsize });
     }
    
     return composits;

@@ -1,6 +1,6 @@
 {
   "name": "@mulsense/voxelkit",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "A JavaScript/TypeScript library for handling various voxel data formats",
   "main": "dist/voxelkit.js",
   "module": "dist/voxelkit.mjs",
