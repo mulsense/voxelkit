@@ -40,6 +40,10 @@ declare const voxelkit: {
     load(path: string, { scale }?: {
         scale?: number | null;
     }): any;
+    parse(blob: Blob, { scale, extension }?: {
+        scale?: number | null;
+        extension?: string;
+    }): Promise<Composit[]>;
     convertVRM(composit: Composit): Promise<Uint8Array<ArrayBufferLike>>;
 };
 

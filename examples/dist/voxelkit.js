@@ -46,7 +46,7 @@
         const slice = bin.slice(offset + 4, offset + 4 + ((length + 7) >> 3));
         return bitarray ? Uint8Array.from({ length }, (_, i) => (slice[i >> 3] >> (i % 8)) & 1) : slice;
     }
-    function hmMakeNode(table) {
+    function hmMakeNode$1(table) {
         const nodes = [{ val: -1, child: [-1, -1] }];
         for (let i = 0; i < table.length; i++) {
             if (table[i].length === 0)
@@ -96,7 +96,7 @@
     }
     function zlDecode(table, src, code, v0, v1) {
         const result = [];
-        const nodes = hmMakeNode(table);
+        const nodes = hmMakeNode$1(table);
         let node = nodes[0];
         for (let i = 0; i < src.length; i++) {
             if ((node = nodes[node.child[src[i]]]).val < 0)
@@ -215,11 +215,11 @@
         }
     }
 
-    function loadMOG(path, scale) {
+    function parseMOG(blob, scale) {
         return __awaiter(this, void 0, void 0, function* () {
             var _a;
-            const response = yield fetch(path);
-            const json = yield response.json();
+            const text = yield blob.text();
+            const json = JSON.parse(text);
             const composits = [];
             for (const jsonmodel of json.models) {
                 const dsize = jsonmodel.dsize;
@@ -647,9 +647,15 @@
         load(path, { scale = null } = {}) {
             var _a;
             const extension = (_a = path.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+            return fetch(path).then((response) => response.blob())
+                .then((blob) => {
+                return voxelkit.parse(blob, { scale, extension });
+            });
+        },
+        parse(blob, { scale = null, extension = 'mog' } = {}) {
             switch (extension) {
                 case 'mog': {
-                    return loadMOG(path, scale);
+                    return parseMOG(blob, scale);
                 }
                 // case 'vox':
                 //     return loadVoxFormat(path);

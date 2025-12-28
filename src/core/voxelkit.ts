@@ -1,14 +1,19 @@
 import { Composit } from './model';
-import { loadMOG } from './mog3d';
+import { parseMOG } from './mog3d';
 import { convertVRM } from './vrm';
 
 export const voxelkit = {
     load(path: string, { scale = null }: { scale?: number | null } = {}): any {
         const extension = path.split('.').pop()?.toLowerCase();
-
+        return fetch(path).then((response: Response) => response.blob())
+        .then((blob: Blob) => {
+            return voxelkit.parse(blob, { scale, extension });
+        })
+    },
+    parse(blob: Blob, { scale = null, extension = 'mog' }: { scale?: number | null, extension?: string } = {}) {
         switch (extension) {
             case 'mog': {
-                return loadMOG(path, scale);
+                return parseMOG(blob, scale);
             }
 
             // case 'vox':

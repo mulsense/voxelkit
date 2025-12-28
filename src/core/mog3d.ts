@@ -2,9 +2,9 @@ import { segment, hmMakeTableFromLngs, table256, zlDecode } from './code';
 import { Vec3 } from './vector';
 import { Composit, Model, Bone } from './model';
 
-export async function loadMOG(path: string, scale: number | null): Promise<Composit[]> {
-    const response = await fetch(path);
-    const json = await response.json();
+export async function parseMOG(blob: Blob, scale: number | null): Promise<Composit[]> {
+    const text = await blob.text();
+    const json = JSON.parse(text);
     const composits: Composit[] = [];
     for (const jsonmodel of json.models) {
         const dsize = jsonmodel.dsize;
