@@ -20,13 +20,36 @@ declare class MapMap<Key1, Key2, Value> extends Map<Key1, Map<Key2, Value>> {
     delete(key1: Key1, key2: Key2): boolean;
 }
 
-declare class Ticker {
-    private id;
-    constructor(callback: Function, fps?: number);
-    clear(): void;
+type UnitElement = HTMLElement | SVGElement;
+
+interface EventProps {
+    element: UnitElement;
+    type: string;
+    listener: Function;
+    options?: boolean | AddEventListenerOptions;
+}
+declare class EventManager {
+    private map;
+    add(props: EventProps): void;
+    remove({ type, listener }: {
+        type: string;
+        listener: Function;
+    }): void;
+    private basic;
+    private resize;
+    private click;
+    private click_outside;
+    private pointer;
+    private mouse;
+    private touch;
+    private pointer_outside;
+    private wheel;
+    private drag;
+    private gesture;
+    private key;
+    private key_arrow;
 }
 
-type UnitElement = HTMLElement | SVGElement;
 interface Context {
     stack: Context | null;
     key?: string;
@@ -36,8 +59,9 @@ interface Snapshot {
     unit: Unit;
     context: Context;
     element: UnitElement;
+    component: Function | null;
 }
-interface UnitInternal {
+interface Internal {
     parent: Unit | null;
     target: Object | null;
     props?: Object;
@@ -46,26 +70,33 @@ interface UnitInternal {
     baseComponent: Function;
     currentElement: UnitElement;
     currentContext: Context;
+    currentComponent: Function | null;
     anchor: UnitElement | null;
     state: string;
     tostart: boolean;
+    protected: boolean;
+    ancestors: Unit[];
     children: Unit[];
-    promises: Promise<any>[];
+    promises: UnitPromise[];
     elements: UnitElement[];
     components: Function[];
     listeners: MapMap<string, Function, {
         element: UnitElement;
+        component: Function | null;
         execute: Function;
     }>;
     defines: Record<string, any>;
-    systems: Record<string, Function[]>;
+    systems: Record<string, {
+        listener: Function;
+        execute: Function;
+    }[]>;
+    eventManager: EventManager;
 }
 declare class Unit {
     [key: string]: any;
-    _: UnitInternal;
+    _: Internal;
     constructor(parent: Unit | null, ...args: any[]);
     get element(): UnitElement;
-    get components(): Function[];
     start(): void;
     stop(): void;
     finalize(): void;
@@ -73,15 +104,16 @@ declare class Unit {
     static initialize(unit: Unit, anchor: UnitElement | null): void;
     static finalize(unit: Unit): void;
     static nest(unit: Unit, tag: string): UnitElement;
+    static currentComponent: Function;
     static extend(unit: Unit, component: Function, props?: Object): {
         [key: string]: any;
     };
     static start(unit: Unit): void;
     static stop(unit: Unit): void;
     static update(unit: Unit): void;
-    static root: Unit;
-    static current: Unit;
-    static ticker: Ticker;
+    static render(unit: Unit): void;
+    static rootUnit: Unit;
+    static currentUnit: Unit;
     static reset(): void;
     static wrap(unit: Unit, listener: Function): (...args: any[]) => any;
     static scope(snapshot: Snapshot, func: Function, ...args: any[]): any;
@@ -92,11 +124,14 @@ declare class Unit {
     static type2units: MapSet<string, Unit>;
     on(type: string, listener: Function, options?: boolean | AddEventListenerOptions): void;
     off(type?: string, listener?: Function): void;
-    emit(type: string, ...args: any[]): void;
+    static on(unit: Unit, type: string, listener: Function, options?: boolean | AddEventListenerOptions): void;
+    static off(unit: Unit, type: string, listener?: Function): void;
+    static emit(type: string, ...args: any[]): void;
 }
 declare class UnitPromise {
-    private promise;
-    constructor(promise: Promise<any>);
+    promise: Promise<any>;
+    component: Function | null;
+    constructor(promise: Promise<any>, component: Function | null);
     then(callback: Function): UnitPromise;
     catch(callback: Function): UnitPromise;
     finally(callback: Function): UnitPromise;
@@ -194,15 +229,6 @@ declare const xnew$1: CreateUnit & {
      */
     finally(callback: Function): UnitPromise;
     /**
-     * Fetches a resource and registers the promise with the current component
-     * @param url - URL to fetch
-     * @param options - Optional fetch options (method, headers, body, etc.)
-     * @returns UnitPromise wrapping the fetch promise
-     * @example
-     * xnew.fetch('/api/users').then(res => res.json()).then(data => console.log(data))
-     */
-    fetch(url: string, options?: object): UnitPromise;
-    /**
      * Creates a scoped callback that captures the current component context
      * @param callback - Function to wrap with current scope
      * @returns Function that executes callback in the captured scope
@@ -222,6 +248,7 @@ declare const xnew$1: CreateUnit & {
      * buttons.forEach(btn => btn.finalize())
      */
     find(component: Function): Unit[];
+    emit(type: string, ...args: any[]): void;
     /**
      * Executes a callback once after a delay, managed by component lifecycle
      * @param timeout - Function to execute after Duration
@@ -256,9 +283,10 @@ declare const xnew$1: CreateUnit & {
      * }, 300)
      */
     transition(transition: Function, duration?: number, easing?: string): any;
+    protect(): void;
 };
 
-declare function AccordionFrame(frame: Unit, { open, duration, easing }?: {
+declare function AccordionFrame(unit: Unit, { open, duration, easing }?: {
     open?: boolean;
     duration?: number;
     easing?: string;
@@ -267,22 +295,14 @@ declare function AccordionFrame(frame: Unit, { open, duration, easing }?: {
     open(): void;
     close(): void;
 };
-declare function AccordionHeader(header: Unit, {}?: {}): void;
-declare function AccordionBullet(bullet: Unit, { type }?: {
-    type?: string;
-}): void;
-declare function AccordionContent(content: Unit, {}?: {}): {
+declare function AccordionContent(unit: Unit, {}?: {}): {
     transition({ element, rate }: {
         element: HTMLElement;
         rate: number;
     }): void;
 };
 
-declare function ResizeEvent(resize: Unit): void;
-declare function KeyboardEvent(keyboard: Unit): void;
-declare function PointerEvent(unit: Unit): void;
-
-declare function Screen(screen: Unit, { width, height, fit }?: {
+declare function Screen(unit: Unit, { width, height, fit }?: {
     width?: number | undefined;
     height?: number | undefined;
     fit?: string | undefined;
@@ -306,38 +326,13 @@ declare function ModalContent(content: Unit, { background }?: {
     }): void;
 };
 
-declare function TabFrame(frame: Unit, { select }?: {
-    select?: string;
-}): void;
-declare function TabButton(button: Unit, { key }?: {
-    key?: string;
-}): {
-    select({ element }: {
-        element: HTMLElement;
-    }): void;
-    deselect({ element }: {
-        element: HTMLElement;
-    }): void;
-};
-declare function TabContent(content: Unit, { key }?: {
-    key?: string;
-}): {
-    select({ element }: {
-        element: HTMLElement;
-    }): void;
-    deselect({ element }: {
-        element: HTMLElement;
-    }): void;
-};
-
 declare function DragFrame(frame: Unit, { x, y }?: {
     x?: number;
     y?: number;
 }): void;
-declare function DragTarget(target: Unit, {}?: {}): void;
+declare function DragTarget(unit: Unit, {}?: {}): void;
 
-declare function AnalogStick(self: Unit, { size, stroke, strokeOpacity, strokeWidth, strokeLinejoin, fill, fillOpacity }?: {
-    size?: number;
+declare function AnalogStick(unit: Unit, { stroke, strokeOpacity, strokeWidth, strokeLinejoin, fill, fillOpacity }?: {
     stroke?: string;
     strokeOpacity?: number;
     strokeWidth?: number;
@@ -346,13 +341,12 @@ declare function AnalogStick(self: Unit, { size, stroke, strokeOpacity, strokeWi
     fill?: string;
     fillOpacity?: number;
 }): void;
-declare function DirectionalPad(self: Unit, { size, diagonal, stroke, strokeOpacity, strokeWidth, strokeLinejoin, fill, fillOpacity }?: {
-    size?: number;
+declare function DirectionalPad(unit: Unit, { diagonal, stroke, strokeOpacity, strokeWidth, strokeLinejoin, fill, fillOpacity }?: {
+    diagonal?: boolean;
     stroke?: string;
     strokeOpacity?: number;
     strokeWidth?: number;
     strokeLinejoin?: string;
-    diagonal?: boolean;
     fill?: string;
     fillOpacity?: number;
 }): void;
@@ -362,8 +356,6 @@ declare function TextStream(unit: Unit, { text, speed, fade }?: {
     speed?: number;
     fade?: number;
 }): void;
-
-declare function VolumeController(unit: Unit, {}?: {}): void;
 
 declare const icons: {
     AcademicCap(unit: Unit, props: Object): void;
@@ -734,24 +726,15 @@ declare class Synthesizer {
 
 declare const basics: {
     Screen: typeof Screen;
-    PointerEvent: typeof PointerEvent;
-    ResizeEvent: typeof ResizeEvent;
-    KeyboardEvent: typeof KeyboardEvent;
     ModalFrame: typeof ModalFrame;
     ModalContent: typeof ModalContent;
     AccordionFrame: typeof AccordionFrame;
-    AccordionHeader: typeof AccordionHeader;
-    AccordionBullet: typeof AccordionBullet;
     AccordionContent: typeof AccordionContent;
-    TabFrame: typeof TabFrame;
-    TabButton: typeof TabButton;
-    TabContent: typeof TabContent;
     TextStream: typeof TextStream;
     DragFrame: typeof DragFrame;
     DragTarget: typeof DragTarget;
     AnalogStick: typeof AnalogStick;
     DirectionalPad: typeof DirectionalPad;
-    VolumeController: typeof VolumeController;
 };
 
 declare const audio: {

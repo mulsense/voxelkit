@@ -35,8 +35,9 @@ function Main(unit, { mogPath = './teto.mog', vrmaPath = './VRMA_07.vrma', size 
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
-  unit.off('update');
-  unit.on('update', () => composer.render());
+  unit.on('render', () => {
+    composer.render();
+  });
 
   xnew(DirectionaLight, { x: 1, y: -1, z: 2 });
   xnew(AmbientLight);
@@ -80,16 +81,7 @@ function Ground(unit) {
 function Controller(unit) {
   unit.on('touchstart contextmenu wheel', (event) => event.preventDefault());
 
-  const pointer = xnew(xnew.basics.PointerEvent);
-  let isActive = false;
-  pointer.on('-gesturestart', () => isActive = true);
-  pointer.on('-gestureend', () => isActive = false);
-  pointer.on('-gesturemove', ({ scale }) => {
-    xnew.emit('+scale', { scale })
-  });
-
-  pointer.on('-dragmove', ({ event, delta }) => {
-    if (isActive === true) return;
+  unit.on('dragmove', ({ event, delta }) => {
     if (event.buttons & 1 || !event.buttons) {
       xnew.emit('+rotate', { move: { x: +delta.x, y: +delta.y } });
     }
@@ -97,7 +89,7 @@ function Controller(unit) {
       xnew.emit('+translate', { move: { x: -delta.x, y: +delta.y } });
     }
   });
-  pointer.on('-wheel', ({ delta }) => xnew.emit('+scale', { scale: 1 + 0.001 * delta.y }));
+  unit.on('wheel', ({ delta }) => xnew.emit('+scale', { scale: 1 + 0.001 * delta.y }));
 }
 
 function Model(unit, { mogPath, vrmaPath, position }) {
@@ -148,7 +140,7 @@ function Model(unit, { mogPath, vrmaPath, position }) {
     action.play();
 
     let clock = new THREE.Clock();
-    unit.on('update', () => {
+    unit.on('render', () => {
         const delta = clock.getDelta();
         mixer.update(delta);
         vrm.update(delta);

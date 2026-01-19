@@ -1,6 +1,7 @@
 declare const _default: {
     initialize({ engine }?: any): void;
-    nest(object: any): any;
     readonly engine: any;
+    readonly world: any;
 };
-export default _default;
+
+export { _default as default };
