@@ -11,10 +11,9 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 import voxelkit from 'voxelkit';
 
-xnew('#main', Main);
+xnew.protect('#main', Main);
 
-function Main(unit, { mogPath = './teto.mog', vrmaPath = './VRMA_07.vrma', size = 512 } = {}) {
-  xnew.protect();
+function Main(unit, { mogPath = './aruma.mog', vrmaPath = './VRMA_07.vrma', size = 512 } = {}) {
   xnew.extend(xnew.basics.Screen, { width: size, height: size });
 
   // three setup
@@ -42,9 +41,19 @@ function Main(unit, { mogPath = './teto.mog', vrmaPath = './VRMA_07.vrma', size 
   xnew(DirectionaLight, { x: 1, y: -1, z: 2 });
   xnew(AmbientLight);
   xnew(Ground);
-  xnew(Controller);
 
   xnew(Model, { mogPath, vrmaPath, position: { x: 0, y: 0, z: 0 } }); // placeholder
+
+  unit.on('touchstart contextmenu wheel', ({ event }) => event.preventDefault());
+  unit.on('dragmove', ({ event, delta }) => {
+    if (event.buttons & 1 || !event.buttons) {
+      xnew.emit('+rotate', { move: { x: +delta.x, y: +delta.y } });
+    }
+    if (event.buttons & 2) {
+      xnew.emit('+translate', { move: { x: -delta.x, y: +delta.y } });
+    }
+  });
+  unit.on('wheel', ({ delta }) => xnew.emit('+scale', { scale: 1 + 0.001 * delta.y }));
 
   unit.on('+scale', ({ scale }) => {
     xthree.camera.position.z /= scale;
@@ -76,20 +85,6 @@ function Ground(unit) {
   const material = new THREE.ShadowMaterial({ opacity: 0.20 });
   const plane = xthree.nest(new THREE.Mesh(geometry, material));
   plane.receiveShadow = true;
-}
-
-function Controller(unit) {
-  unit.on('touchstart contextmenu wheel', (event) => event.preventDefault());
-
-  unit.on('dragmove', ({ event, delta }) => {
-    if (event.buttons & 1 || !event.buttons) {
-      xnew.emit('+rotate', { move: { x: +delta.x, y: +delta.y } });
-    }
-    if (event.buttons & 2) {
-      xnew.emit('+translate', { move: { x: -delta.x, y: +delta.y } });
-    }
-  });
-  unit.on('wheel', ({ delta }) => xnew.emit('+scale', { scale: 1 + 0.001 * delta.y }));
 }
 
 function Model(unit, { mogPath, vrmaPath, position }) {
