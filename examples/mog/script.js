@@ -11,14 +11,17 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 import voxelkit from 'voxelkit';
 
-xnew.protect('#main', Main);
+xnew(document.querySelector('#main'), Main);
 
 function Main(unit, { mogPath = './aruma.mog', vrmaPath = './VRMA_07.vrma', size = 512 } = {}) {
-  xnew.extend(xnew.basics.Screen, { width: size, height: size });
+  xnew.protect();
+  xnew.extend(xnew.basics.Screen, { aspect: 1.0, fit: 'contain' });
 
+  const canvas = xnew(`<canvas width="${size}" height="${size}" class="size-full align-bottom">`);
+  
   // three setup
   const camera = new THREE.OrthographicCamera(-0.5, +0.5, +0.5, -0.5, 0, 10);
-  xthree.initialize({ canvas: unit.canvas, camera });
+  xthree.initialize({ canvas: canvas.element, camera });
   xthree.camera.position.set(0, 0.2, +2);
   xthree.renderer.shadowMap.enabled = true;
   xthree.renderer.shadowMap.type = THREE.PCFShadowMap;
