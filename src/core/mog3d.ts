@@ -6,24 +6,23 @@ export async function parseMOG(blob: Blob, scale: number | null): Promise<Compos
     const text = await blob.text();
     const json = JSON.parse(text);
     const composits: Composit[] = [];
-    for (const jsonmodel of json.models) {
-        const dsize = jsonmodel.dsize;
-        const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
-        const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
 
-        const models = jsonmodel.layers.map((jsonlayer: any) => {
-            return decode(dsize, palette, jsonlayer.name, jsonlayer.map, s);
-        });
+    const dsize = json.dsize;
+    const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
+    const palette = Uint8Array.from(atob(json.palette), c => c.charCodeAt(0));
 
-        const bones: Bone[] = [];
-        for(const jsonbone of (jsonmodel.bones ?? [])) {
-            const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null
-            const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), s);
-            const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), s);
-            bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
-        }
-        composits.push({ models, bones, dsize });
+    const models = json.layers.map((jsonlayer: any) => {
+        return decode(dsize, palette, jsonlayer.name, jsonlayer.data, s);
+    });
+
+    const bones: Bone[] = [];
+    for(const jsonbone of (json.bones ?? [])) {
+        const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null
+        const vec0 = Vec3.mul(new Vec3(jsonbone.vector[0], jsonbone.vector[1], jsonbone.vector[2]), s);
+        const vec1 = Vec3.mul(new Vec3(jsonbone.vector[3], jsonbone.vector[4], jsonbone.vector[5]), s);
+        bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.layers));
     }
+    composits.push({ models, bones, dsize });
    
     return composits;
 }
@@ -32,26 +31,26 @@ function decode(
     dsize: [number, number, number],
     palette: Uint8Array,
     name: string,
-    map: string,
+    data: string,
     scale: number)
     : Model
 {
     const gmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
     const cmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
 
-    const mapbin = Uint8Array.from(atob(map), c => c.charCodeAt(0));
+    const mapbin = Uint8Array.from(atob(data), c => c.charCodeAt(0));
     if (mapbin.length == 0) return new Model(name, 0);
 
     const memA = segment(mapbin, 0, true);
     const memB = zlDecode(table256(), segment(mapbin, 1, true), 256, 8, 8);
 
     const PALETTE_CODE = 256;
-    const data = segment(mapbin, 2);
+    const sag = segment(mapbin, 2);
     const lngs = new Array(PALETTE_CODE + 1).fill(0);
-    for (let c = 0; c < data.length - 1; c += 2) {
-        lngs[data[c + 0]] = data[c + 1];
+    for (let c = 0; c < sag.length - 1; c += 2) {
+        lngs[sag[c + 0]] = sag[c + 1];
     }
-    lngs[PALETTE_CODE] = data[data.length - 1];
+    lngs[PALETTE_CODE] = sag[sag.length - 1];
 
     const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(mapbin, 3, true), PALETTE_CODE, 8, 8);
 

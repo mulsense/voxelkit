@@ -13,7 +13,7 @@ import voxelkit from 'voxelkit';
 
 xnew(document.querySelector('#main'), Main);
 
-function Main(unit, { mogPath = './aruma.mog', vrmaPath = './VRMA_07.vrma', size = 512 } = {}) {
+function Main(unit, { mogPath = './rei.mog', vrmaPath = './VRMA_07.vrma', size = 512 } = {}) {
   xnew.protect();
   xnew.extend(xnew.basics.Screen, { aspect: 1.0, fit: 'contain' });
 

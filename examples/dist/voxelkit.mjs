@@ -40,7 +40,7 @@ function segment(bin, p, bitarray = false) {
     const slice = bin.slice(offset + 4, offset + 4 + ((length + 7) >> 3));
     return bitarray ? Uint8Array.from({ length }, (_, i) => (slice[i >> 3] >> (i % 8)) & 1) : slice;
 }
-function hmMakeNode$1(table) {
+function hmMakeNode(table) {
     const nodes = [{ val: -1, child: [-1, -1] }];
     for (let i = 0; i < table.length; i++) {
         if (table[i].length === 0)
@@ -90,7 +90,7 @@ function hmMakeTableFromLngs(lngs) {
 }
 function zlDecode(table, src, code, v0, v1) {
     const result = [];
-    const nodes = hmMakeNode$1(table);
+    const nodes = hmMakeNode(table);
     let node = nodes[0];
     for (let i = 0; i < src.length; i++) {
         if ((node = nodes[node.child[src[i]]]).val < 0)
@@ -215,40 +215,38 @@ function parseMOG(blob, scale) {
         const text = yield blob.text();
         const json = JSON.parse(text);
         const composits = [];
-        for (const jsonmodel of json.models) {
-            const dsize = jsonmodel.dsize;
-            const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
-            const palette = Uint8Array.from(atob(jsonmodel.palette), c => c.charCodeAt(0));
-            const models = jsonmodel.layers.map((jsonlayer) => {
-                return decode(dsize, palette, jsonlayer.name, jsonlayer.map, s);
-            });
-            const bones = [];
-            for (const jsonbone of ((_a = jsonmodel.bones) !== null && _a !== void 0 ? _a : [])) {
-                const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null;
-                const vec0 = Vec3.mul(new Vec3(jsonbone.vec0[0], jsonbone.vec0[1], jsonbone.vec0[2]), s);
-                const vec1 = Vec3.mul(new Vec3(jsonbone.vec1[0], jsonbone.vec1[1], jsonbone.vec1[2]), s);
-                bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.refs));
-            }
-            composits.push({ models, bones, dsize });
+        const dsize = json.dsize;
+        const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
+        const palette = Uint8Array.from(atob(json.palette), c => c.charCodeAt(0));
+        const models = json.layers.map((jsonlayer) => {
+            return decode(dsize, palette, jsonlayer.name, jsonlayer.data, s);
+        });
+        const bones = [];
+        for (const jsonbone of ((_a = json.bones) !== null && _a !== void 0 ? _a : [])) {
+            const parent = jsonbone.parent >= 0 ? bones[jsonbone.parent] : null;
+            const vec0 = Vec3.mul(new Vec3(jsonbone.vector[0], jsonbone.vector[1], jsonbone.vector[2]), s);
+            const vec1 = Vec3.mul(new Vec3(jsonbone.vector[3], jsonbone.vector[4], jsonbone.vector[5]), s);
+            bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.layers));
         }
+        composits.push({ models, bones, dsize });
         return composits;
     });
 }
-function decode(dsize, palette, name, map, scale) {
+function decode(dsize, palette, name, data, scale) {
     const gmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
     const cmap = new Uint8Array(dsize[0] * dsize[1] * dsize[2]).fill(0);
-    const mapbin = Uint8Array.from(atob(map), c => c.charCodeAt(0));
+    const mapbin = Uint8Array.from(atob(data), c => c.charCodeAt(0));
     if (mapbin.length == 0)
         return new Model(name, 0);
     const memA = segment(mapbin, 0, true);
     const memB = zlDecode(table256(), segment(mapbin, 1, true), 256, 8, 8);
     const PALETTE_CODE = 256;
-    const data = segment(mapbin, 2);
+    const sag = segment(mapbin, 2);
     const lngs = new Array(PALETTE_CODE + 1).fill(0);
-    for (let c = 0; c < data.length - 1; c += 2) {
-        lngs[data[c + 0]] = data[c + 1];
+    for (let c = 0; c < sag.length - 1; c += 2) {
+        lngs[sag[c + 0]] = sag[c + 1];
     }
-    lngs[PALETTE_CODE] = data[data.length - 1];
+    lngs[PALETTE_CODE] = sag[sag.length - 1];
     const memC = zlDecode(hmMakeTableFromLngs(lngs), segment(mapbin, 3, true), PALETTE_CODE, 8, 8);
     let [a, b, c] = [0, 0, 0];
     for (let z = 0; z < Math.ceil(dsize[2] / 8); z++) {
