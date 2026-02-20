@@ -20,20 +20,26 @@ function Main(unit, { mogPath = './aruma.mog', vrmaPath = './VRMA_07.vrma', size
   const canvas = xnew(`<canvas width="${size}" height="${size}" class="size-full align-bottom">`);
   
   // three setup
-  const camera = new THREE.OrthographicCamera(-0.5, +0.5, +0.5, -0.5, 0, 10);
+  const camera = new THREE.OrthographicCamera(-0.5, +0.5, +0.5, -0.5, 0.1, 10);
   xthree.initialize({ canvas: canvas.element, camera });
   xthree.camera.position.set(0, 0.2, +2);
-  xthree.renderer.shadowMap.enabled = true;
-  xthree.renderer.shadowMap.type = THREE.PCFShadowMap;
+  // xthree.renderer.shadowMap.enabled = true;
+  // xthree.renderer.shadowMap.type = THREE.PCFShadowMap;
   xthree.scene.rotation.x = -60 / 180 * Math.PI
   xthree.scene.rotation.z = -20 / 180 * Math.PI
 
   const composer = new EffectComposer(xthree.renderer);
   composer.addPass(new RenderPass(xthree.scene, xthree.camera));
   const ssaoPass = new SSAOPass(xthree.scene, xthree.camera, xthree.canvas.width, xthree.canvas.height);
-  ssaoPass.kernelRadius = 0.1;      // サンプリング半径
-  ssaoPass.minDistance = 0.00001;   // 最小距離
-  ssaoPass.maxDistance = 0.00005;     // 最大距離
+  // OrthographicCamera 用: シェーダーのデフォルトは PERSPECTIVE_CAMERA=1 のため明示的に上書き
+  ssaoPass.ssaoMaterial.defines['PERSPECTIVE_CAMERA'] = 0;
+  ssaoPass.ssaoMaterial.needsUpdate = true;
+  ssaoPass.depthRenderMaterial.defines['PERSPECTIVE_CAMERA'] = 0;
+  ssaoPass.depthRenderMaterial.needsUpdate = true;
+  ssaoPass.kernelRadius = 0.05;     // サンプリング半径
+  ssaoPass.minDistance = 0.001;   // 最小距離（linearized depth 0〜1 スケール）
+  ssaoPass.maxDistance = 0.02;    // 最大距離
+  // ssaoPass.output = SSAOPass.OUTPUT.Depth;  // 診断用
   composer.addPass(ssaoPass);
   composer.addPass(new OutputPass());
 
