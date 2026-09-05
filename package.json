@@ -1,6 +1,6 @@
 {
   "name": "@mulsense/voxelkit",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "description": "A JavaScript/TypeScript library for handling various voxel data formats",
   "main": "dist/voxelkit.js",
   "module": "dist/voxelkit.mjs",
@@ -32,7 +32,7 @@
     "url": "https://github.com/mulsense/voxelkit/issues"
   },
   "homepage": "https://github.com/mulsense/voxelkit#readme",
-  "dependencies": {
+  "devDependencies": {
     "@babel/core": "^7.28.5",
     "@babel/preset-env": "^7.28.5",
     "@rollup/plugin-typescript": "^12.3.0",
