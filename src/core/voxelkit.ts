@@ -3,17 +3,17 @@ import { parseMOG } from './mog3d';
 import { convertVRM } from './vrm';
 
 export const voxelkit = {
-    load(path: string, { scale = null }: { scale?: number | null } = {}): any {
+    load(path: string, { scale = null, chamfer = 0.0 }: { scale?: number | null, chamfer?: number } = {}): any {
         const extension = path.split('.').pop()?.toLowerCase();
         return fetch(path).then((response: Response) => response.blob())
         .then((blob: Blob) => {
-            return voxelkit.parse(blob, { scale, extension });
+            return voxelkit.parse(blob, { scale, chamfer, extension });
         })
     },
-    parse(blob: Blob, { scale = null, extension = 'mog' }: { scale?: number | null, extension?: string } = {}) {
+    parse(blob: Blob, { scale = null, chamfer = 0.0, extension = 'mog' }: { scale?: number | null, chamfer?: number, extension?: string } = {}) {
         switch (extension) {
             case 'mog': {
-                return parseMOG(blob, scale);
+                return parseMOG(blob, scale, chamfer);
             }
 
             // case 'vox':
