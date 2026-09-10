@@ -1,5 +1,6 @@
 import { Composit } from './model';
 import { parseMOG } from './mog3d';
+import { parseMOGOld } from './mog3d_old';
 import { convertVRM } from './vrm';
 
 export const voxelkit = {
@@ -13,7 +14,10 @@ export const voxelkit = {
     parse(blob: Blob, { scale = null, chamfer = 0.0, extension = 'mog' }: { scale?: number | null, chamfer?: number, extension?: string } = {}) {
         switch (extension) {
             case 'mog': {
-                return parseMOG(blob, scale, chamfer);
+                // the old format is a text tree starting with '(', the current one is JSON
+                return blob.slice(0, 1).text().then((head: string) => {
+                    return head === '(' ? parseMOGOld(blob, scale, chamfer) : parseMOG(blob, scale, chamfer);
+                });
             }
 
             // case 'vox':

@@ -80,14 +80,19 @@ export function zlDecode(table: number[][], src: Uint8Array, code: number, v0: n
 }
 
 
-export function table256(): number[][] {
+/**
+ * The fixed huffman table used for the occupancy stream.
+ *
+ * @param escape the weight given to the LZSS escape code; the old mog format used 2^7 here
+ */
+export function table256(escape: number = 2 ** 8): number[][] {
     type NodeType = { cnt: number; parent: NodeType | null };
     const nodes: NodeType[] = [];
     for (let i = 0; i < 256; i++) {
         const sum = [...new Array(7).keys()].map(s => ((i >> s) ^ (i >> (s + 1))) & 1).reduce((a, b) => a + b);
         nodes.push({ cnt: 2 ** (7 - sum), parent: null });
     }
-    nodes.push({ cnt: 2 ** 8, parent: null });
+    nodes.push({ cnt: escape, parent: null });
 
     for (let i = 0; i < 256 + 1 - 1; i++) {
         const node: NodeType = { cnt: 0, parent: null };

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script type="importmap">
+    {
+      "imports": {
+        "voxelkit": "../dist/voxelkit.mjs",
+        "three": "../thirdparty/three/three.module.js",
+        "three/addons/": "../thirdparty/three/addons/",
+        "@mulsense/xnew": "../thirdparty/xnew/xnew.mjs",
+        "@mulsense/xnew/addons/xthree": "../thirdparty/xnew/addons/xthree.mjs",
+        "@pixiv/three-vrm": "../thirdparty/three-vrm/three-vrm.module.min.js",
+        "@pixiv/three-vrm-animation": "../thirdparty/three-vrm/three-vrm-animation.module.min.js"
+      }
+    }
+  </script>
+  <script type="module" src="./script.js"></script>
+</head>
+
+<body style="margin: 0; height: 100vh;">
+  <div id="main" style="width: 100%; height: 100%;"></div>
+</body>
+
+</html>
