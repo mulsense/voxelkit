@@ -95,35 +95,43 @@ describe('buildModel jitter', () => {
         );
     });
 
-    test('keeps every vertex within the amount it was given', () => {
+    test('moves the whole layer by one offset of the length it was given', () => {
         const plain = build([1, 1, 1], [[0, 0, 0]], 0.0);
-        const shaken = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
+        const moved = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
 
-        expect(shaken.vertexs.length).toBe(plain.vertexs.length);
+        expect(moved.vertexs.length).toBe(plain.vertexs.length);
+
+        const shift = [0, 1, 2].map(k => moved.vertexs[k] - plain.vertexs[k]);
+        // every vertex moves by the same offset, not by one of its own
         for (let i = 0; i < plain.vertexs.length; i++) {
-            const moved = Math.abs(shaken.vertexs[i] - plain.vertexs[i]);
-            expect(moved).toBeGreaterThan(0);
-            expect(moved).toBeLessThanOrEqual(0.01);
+            expect(moved.vertexs[i] - plain.vertexs[i]).toBeCloseTo(shift[i % 3], 6);
         }
+        // the direction is random, the distance is not
+        expect(Math.sqrt(shift.reduce((s, n) => s + n * n, 0))).toBeCloseTo(0.01, 6);
     });
 
-    test('pulls apart vertices that used to coincide', () => {
-        // that is the point of it: surfaces on the same plane no longer land
-        // on the same depth. A cube has 8 corners shared by 36 vertices
-        expect(new Set(positions(build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01))).size).toBe(36);
+    test('leaves the surface of the layer closed', () => {
+        // that is the whole reason for moving the layer as one piece
+        expect(openArea(build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01))).toBeLessThan(1e-6);
+        expect(openArea(build([1, 1, 1], [[0, 0, 0]], 0.25, 0.01))).toBeLessThan(1e-6);
+        expect(new Set(positions(build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01))).size).toBe(8);
     });
 
-    test('opens the surface, which is the price of it', () => {
-        // the displacement is per vertex, so the seams between faces no longer
-        // meet. Keep the amount small enough that the gaps stay sub-pixel
-        expect(openArea(build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01))).toBeGreaterThan(0);
+    test('sends two layers in different directions', () => {
+        const shift = () => {
+            const plain = build([1, 1, 1], [[0, 0, 0]], 0.0);
+            const moved = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
+            return [0, 1, 2].map(k => moved.vertexs[k] - plain.vertexs[k]).join();
+        };
+
+        expect(shift()).not.toBe(shift());
     });
 
     test('leaves the normals alone', () => {
-        const shaken = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
+        const moved = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
 
-        for (let i = 0; i < shaken.normals.length / 3; i++) {
-            const n = [0, 1, 2].map(k => shaken.normals[i * 3 + k]);
+        for (let i = 0; i < moved.normals.length / 3; i++) {
+            const n = [0, 1, 2].map(k => moved.normals[i * 3 + k]);
             expect(n.filter(v => v !== 0)).toHaveLength(1);
         }
     });

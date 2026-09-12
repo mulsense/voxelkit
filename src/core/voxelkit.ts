@@ -4,14 +4,22 @@ import { parseMOGOld } from './mog3d_old';
 import { convertVRM } from './vrm';
 
 /**
- * Default vertex jitter, as a ratio of the voxel size.
+ * Default jitter, as a ratio of the voxel size.
  *
  * Voxel models put a lot of surfaces on exactly the same plane. Most of all,
  * a model's layers are meshed one at a time, so where two layers touch both
- * of them emit the shared face and the two land at the same depth. A small
- * displacement keeps them apart. See `buildModel` for what it costs.
+ * of them emit the shared face and the two land at the same depth. Moving each
+ * layer by this much, in a random direction, keeps them apart. The layer moves
+ * as one piece, so nothing about its own surface changes.
+ *
+ * A hundredth of a voxel is small enough to be invisible — a tenth of a pixel
+ * at the size a model is usually drawn — and large enough to clear the depth
+ * buffer's resolution. Under a perspective camera with a near plane close to
+ * the viewer, one step of a 24-bit depth buffer can be a few thousandths of a
+ * voxel, so anything smaller than that rounds back onto the same depth and
+ * changes nothing.
  */
-const JITTER = 0.001;
+const JITTER = 0.01;
 
 export const voxelkit = {
     load(path: string, { scale = null, chamfer = 0.0, jitter = JITTER }: { scale?: number | null, chamfer?: number, jitter?: number } = {}): any {

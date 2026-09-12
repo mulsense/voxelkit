@@ -242,6 +242,16 @@ function unit(vec) {
     const length = Math.sqrt(dot(vec, vec));
     return [vec[0] / length, vec[1] / length, vec[2] / length];
 }
+/** a vector of the given length pointing somewhere at random */
+function displacement(length) {
+    if (length <= 0)
+        return [0, 0, 0];
+    // a direction drawn evenly over the sphere
+    const z = Math.random() * 2 - 1;
+    const angle = Math.random() * 2 * Math.PI;
+    const r = Math.sqrt(1 - z * z);
+    return [r * Math.cos(angle) * length, r * Math.sin(angle) * length, z * length];
+}
 function parseMOG(blob_1, scale_1) {
     return __awaiter(this, arguments, void 0, function* (blob, scale, chamfer = 0.0, jitter = 0.0) {
         var _a;
@@ -318,16 +328,16 @@ function decodeGrid(dsize, data) {
  * Edges are beveled only where the model as a whole is convex there, so a flat
  * run of voxels stays flat instead of every voxel being beveled on its own.
  *
- * `jitter` displaces every emitted vertex by up to that ratio of the voxel size
- * on each axis, drawn independently (0.0 disables it). Voxel grids put many
- * surfaces on exactly the same plane — most of all where two layers of the same
- * model meet, since each layer is meshed on its own and both emit the shared
- * face. Displacing the vertices keeps those planes from landing on the same
- * depth and fighting over which one is drawn.
+ * `jitter` moves the whole model by that ratio of the voxel size, in a
+ * direction drawn at random (0.0 disables it). A model is meshed one layer at
+ * a time, so where two layers touch both of them emit the shared face and the
+ * two land on exactly the same plane, fighting over which one is drawn. One
+ * displacement per call — that is, per layer — is enough to separate them.
  *
- * The displacement is drawn per vertex, not per position, so vertices that
- * coincide move apart: the surface is no longer watertight and the silhouette
- * is no longer perfectly straight. Keep the amount far below the voxel size.
+ * It is a single offset rather than per-vertex noise on purpose: every vertex
+ * of the layer moves by the same amount, so the surface stays as watertight and
+ * as straight-edged as it was built. The direction is random but the distance
+ * is exactly `jitter`, so no layer is left where it was.
  *
  * @param gmap occupancy map (bit 0x40 marks a filled voxel)
  * @param cmap palette index per voxel
@@ -431,21 +441,21 @@ function buildModel(name, dsize, gmap, cmap, palette, scale, chamfer = 0.0, jitt
         const low = dot(FACE_DIRS[free], e) < 0 ? free : free ^ 1;
         return [corner(x, y, z, i, j, low), corner(x, y, z, i, j, low ^ 1)];
     };
-    /** displaces a vertex by up to `noise` on each axis */
-    const shake = (point) => [
-        point[0] + (Math.random() * 2 - 1) * noise,
-        point[1] + (Math.random() * 2 - 1) * noise,
-        point[2] + (Math.random() * 2 - 1) * noise,
-    ];
+    // One displacement for the whole model, in a random direction. buildModel()
+    // is called once per layer, so this moves the layers apart from each other
+    // while the surface within a layer stays exactly as it was built.
+    const shift = displacement(noise);
     let vp = 0;
     const emit = (points, normal, p) => {
         const c = cmap[p];
         const color = [palette[c * 4 + 0], palette[c * 4 + 1], palette[c * 4 + 2]];
         for (const point of points) {
             model.indices[vp] = vp;
-            // the normal is left alone: the displacement is far too small to
-            // shade differently, and recomputing it would break the flat look
-            model.vertexs.set(noise > 0 ? shake(point) : point, vp * 3);
+            model.vertexs[vp * 3 + 0] = point[0] + shift[0];
+            model.vertexs[vp * 3 + 1] = point[1] + shift[1];
+            model.vertexs[vp * 3 + 2] = point[2] + shift[2];
+            // the normal is left alone: the whole model moves as one, so no
+            // face changes the way it is turned
             model.normals.set(normal, vp * 3);
             model.colors.set(color, vp * 3);
             vp++;
@@ -1083,14 +1093,22 @@ function convertVRM(models, bones) {
 }
 
 /**
- * Default vertex jitter, as a ratio of the voxel size.
+ * Default jitter, as a ratio of the voxel size.
  *
  * Voxel models put a lot of surfaces on exactly the same plane. Most of all,
  * a model's layers are meshed one at a time, so where two layers touch both
- * of them emit the shared face and the two land at the same depth. A small
- * displacement keeps them apart. See `buildModel` for what it costs.
+ * of them emit the shared face and the two land at the same depth. Moving each
+ * layer by this much, in a random direction, keeps them apart. The layer moves
+ * as one piece, so nothing about its own surface changes.
+ *
+ * A hundredth of a voxel is small enough to be invisible — a tenth of a pixel
+ * at the size a model is usually drawn — and large enough to clear the depth
+ * buffer's resolution. Under a perspective camera with a near plane close to
+ * the viewer, one step of a 24-bit depth buffer can be a few thousandths of a
+ * voxel, so anything smaller than that rounds back onto the same depth and
+ * changes nothing.
  */
-const JITTER = 0.001;
+const JITTER = 0.01;
 const voxelkit = {
     load(path, { scale = null, chamfer = 0.0, jitter = JITTER } = {}) {
         var _a;
