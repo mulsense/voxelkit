@@ -12,9 +12,9 @@ function grid(dsize: [number, number, number], cells: [number, number, number][]
     return { gmap, cmap };
 }
 
-function build(dsize: [number, number, number], cells: [number, number, number][], chamfer: number) {
+function build(dsize: [number, number, number], cells: [number, number, number][], chamfer: number, jitter: number = 0.0) {
     const { gmap, cmap } = grid(dsize, cells);
-    return buildModel('test', dsize, gmap, cmap, PALETTE, 1.0, chamfer);
+    return buildModel('test', dsize, gmap, cmap, PALETTE, 1.0, chamfer, jitter);
 }
 
 function positions(model: { vertexs: Float32Array }): string[] {
@@ -88,6 +88,47 @@ describe('buildModel', () => {
 });
 
 /** sum of the triangle area vectors; zero on a closed surface, the hole's area vector otherwise */
+describe('buildModel jitter', () => {
+    test('is off unless asked for', () => {
+        expect(positions(build([1, 1, 1], [[0, 0, 0]], 0.0))).toEqual(
+            positions(build([1, 1, 1], [[0, 0, 0]], 0.0)),
+        );
+    });
+
+    test('keeps every vertex within the amount it was given', () => {
+        const plain = build([1, 1, 1], [[0, 0, 0]], 0.0);
+        const shaken = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
+
+        expect(shaken.vertexs.length).toBe(plain.vertexs.length);
+        for (let i = 0; i < plain.vertexs.length; i++) {
+            const moved = Math.abs(shaken.vertexs[i] - plain.vertexs[i]);
+            expect(moved).toBeGreaterThan(0);
+            expect(moved).toBeLessThanOrEqual(0.01);
+        }
+    });
+
+    test('pulls apart vertices that used to coincide', () => {
+        // that is the point of it: surfaces on the same plane no longer land
+        // on the same depth. A cube has 8 corners shared by 36 vertices
+        expect(new Set(positions(build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01))).size).toBe(36);
+    });
+
+    test('opens the surface, which is the price of it', () => {
+        // the displacement is per vertex, so the seams between faces no longer
+        // meet. Keep the amount small enough that the gaps stay sub-pixel
+        expect(openArea(build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01))).toBeGreaterThan(0);
+    });
+
+    test('leaves the normals alone', () => {
+        const shaken = build([1, 1, 1], [[0, 0, 0]], 0.0, 0.01);
+
+        for (let i = 0; i < shaken.normals.length / 3; i++) {
+            const n = [0, 1, 2].map(k => shaken.normals[i * 3 + k]);
+            expect(n.filter(v => v !== 0)).toHaveLength(1);
+        }
+    });
+});
+
 function openArea(model: { vertexs: Float32Array }): number {
     const sum = [0, 0, 0];
     let total = 0;

@@ -243,7 +243,7 @@ function unit(vec) {
     return [vec[0] / length, vec[1] / length, vec[2] / length];
 }
 function parseMOG(blob_1, scale_1) {
-    return __awaiter(this, arguments, void 0, function* (blob, scale, chamfer = 0.0) {
+    return __awaiter(this, arguments, void 0, function* (blob, scale, chamfer = 0.0, jitter = 0.0) {
         var _a;
         const text = yield blob.text();
         const json = JSON.parse(text);
@@ -252,7 +252,7 @@ function parseMOG(blob_1, scale_1) {
         const s = (scale !== null ? scale : (dsize[1] / 32 * 20)) * 0.001;
         const palette = Uint8Array.from(atob(json.palette), c => c.charCodeAt(0));
         const models = json.layers.map((jsonlayer) => {
-            return decode(dsize, palette, jsonlayer.name, jsonlayer.data, s, chamfer);
+            return decode(dsize, palette, jsonlayer.name, jsonlayer.data, s, chamfer, jitter);
         });
         const bones = [];
         for (const jsonbone of ((_a = json.bones) !== null && _a !== void 0 ? _a : [])) {
@@ -265,9 +265,9 @@ function parseMOG(blob_1, scale_1) {
         return composits;
     });
 }
-function decode(dsize, palette, name, data, scale, chamfer) {
+function decode(dsize, palette, name, data, scale, chamfer, jitter = 0.0) {
     const { gmap, cmap } = decodeGrid(dsize, data);
-    return buildModel(name, dsize, gmap, cmap, palette, scale, chamfer);
+    return buildModel(name, dsize, gmap, cmap, palette, scale, chamfer, jitter);
 }
 /**
  * Expands the compressed layer data into an occupancy map (bit 0x40) and a palette index map.
@@ -318,12 +318,24 @@ function decodeGrid(dsize, data) {
  * Edges are beveled only where the model as a whole is convex there, so a flat
  * run of voxels stays flat instead of every voxel being beveled on its own.
  *
+ * `jitter` displaces every emitted vertex by up to that ratio of the voxel size
+ * on each axis, drawn independently (0.0 disables it). Voxel grids put many
+ * surfaces on exactly the same plane — most of all where two layers of the same
+ * model meet, since each layer is meshed on its own and both emit the shared
+ * face. Displacing the vertices keeps those planes from landing on the same
+ * depth and fighting over which one is drawn.
+ *
+ * The displacement is drawn per vertex, not per position, so vertices that
+ * coincide move apart: the surface is no longer watertight and the silhouette
+ * is no longer perfectly straight. Keep the amount far below the voxel size.
+ *
  * @param gmap occupancy map (bit 0x40 marks a filled voxel)
  * @param cmap palette index per voxel
  */
-function buildModel(name, dsize, gmap, cmap, palette, scale, chamfer = 0.0) {
+function buildModel(name, dsize, gmap, cmap, palette, scale, chamfer = 0.0, jitter = 0.0) {
     const half = scale / 2;
     const width = Math.min(Math.max(chamfer, 0.0), 0.5) * scale;
+    const noise = Math.max(jitter, 0.0) * scale;
     const solid = (x, y, z) => {
         if (x < 0 || y < 0 || z < 0 || x >= dsize[0] || y >= dsize[1] || z >= dsize[2])
             return false;
@@ -419,13 +431,21 @@ function buildModel(name, dsize, gmap, cmap, palette, scale, chamfer = 0.0) {
         const low = dot(FACE_DIRS[free], e) < 0 ? free : free ^ 1;
         return [corner(x, y, z, i, j, low), corner(x, y, z, i, j, low ^ 1)];
     };
+    /** displaces a vertex by up to `noise` on each axis */
+    const shake = (point) => [
+        point[0] + (Math.random() * 2 - 1) * noise,
+        point[1] + (Math.random() * 2 - 1) * noise,
+        point[2] + (Math.random() * 2 - 1) * noise,
+    ];
     let vp = 0;
     const emit = (points, normal, p) => {
         const c = cmap[p];
         const color = [palette[c * 4 + 0], palette[c * 4 + 1], palette[c * 4 + 2]];
         for (const point of points) {
             model.indices[vp] = vp;
-            model.vertexs.set(point, vp * 3);
+            // the normal is left alone: the displacement is far too small to
+            // shade differently, and recomputing it would break the flat look
+            model.vertexs.set(noise > 0 ? shake(point) : point, vp * 3);
             model.normals.set(normal, vp * 3);
             model.colors.set(color, vp * 3);
             vp++;
@@ -756,7 +776,7 @@ function parseBones(node, dsize, scale) {
     }
     return bones;
 }
-function parseUnit(node, version, scale, chamfer) {
+function parseUnit(node, version, scale, chamfer, jitter) {
     var _a, _b, _c, _d;
     const size = numbers(child(node, 'size'));
     let dsize = [(_a = size[0]) !== null && _a !== void 0 ? _a : 0, (_b = size[1]) !== null && _b !== void 0 ? _b : 0, (_c = size[2]) !== null && _c !== void 0 ? _c : 0];
@@ -783,22 +803,22 @@ function parseUnit(node, version, scale, chamfer) {
         const cmap = legacy ? child(n, 'bin1') : child(n, 'cmap');
         if (vmap === null) {
             const empty = new Uint8Array(dsize[0] * dsize[1] * dsize[2]);
-            return buildModel(name, dsize, empty, empty, palette, s, chamfer);
+            return buildModel(name, dsize, empty, empty, palette, s, chamfer, jitter);
         }
         const { memA, memB } = decodeVmap(vmap);
         const memC = cmap !== null ? decodeCmap(cmap, legacy) : [];
         const { gmap, cmap: indices } = decodeMaps(dsize, rect, memA, memB, memC);
-        return buildModel(name, dsize, gmap, indices, palette, s, chamfer);
+        return buildModel(name, dsize, gmap, indices, palette, s, chamfer, jitter);
     });
     const bones = (version === '0.3' || version === '1.0') ? parseBones(node, base, s) : [];
     return { models, bones, dsize: base };
 }
 function parseMOGOld(blob_1, scale_1) {
-    return __awaiter(this, arguments, void 0, function* (blob, scale, chamfer = 0.0) {
+    return __awaiter(this, arguments, void 0, function* (blob, scale, chamfer = 0.0, jitter = 0.0) {
         var _a, _b;
         const root = parseSpio(new Uint8Array(yield blob.arrayBuffer()));
         const version = (_b = (_a = child(root, '.mog')) === null || _a === void 0 ? void 0 : _a.text) !== null && _b !== void 0 ? _b : '';
-        return childs(root, 'unit').map(node => parseUnit(node, version, scale, chamfer));
+        return childs(root, 'unit').map(node => parseUnit(node, version, scale, chamfer, jitter));
     });
 }
 
@@ -1062,21 +1082,30 @@ function convertVRM(models, bones) {
     });
 }
 
+/**
+ * Default vertex jitter, as a ratio of the voxel size.
+ *
+ * Voxel models put a lot of surfaces on exactly the same plane. Most of all,
+ * a model's layers are meshed one at a time, so where two layers touch both
+ * of them emit the shared face and the two land at the same depth. A small
+ * displacement keeps them apart. See `buildModel` for what it costs.
+ */
+const JITTER = 0.001;
 const voxelkit = {
-    load(path, { scale = null, chamfer = 0.0 } = {}) {
+    load(path, { scale = null, chamfer = 0.0, jitter = JITTER } = {}) {
         var _a;
         const extension = (_a = path.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
         return fetch(path).then((response) => response.blob())
             .then((blob) => {
-            return voxelkit.parse(blob, { scale, chamfer, extension });
+            return voxelkit.parse(blob, { scale, chamfer, jitter, extension });
         });
     },
-    parse(blob, { scale = null, chamfer = 0.0, extension = 'mog' } = {}) {
+    parse(blob, { scale = null, chamfer = 0.0, jitter = JITTER, extension = 'mog' } = {}) {
         switch (extension) {
             case 'mog': {
                 // the old format is a text tree starting with '(', the current one is JSON
                 return blob.slice(0, 1).text().then((head) => {
-                    return head === '(' ? parseMOGOld(blob, scale, chamfer) : parseMOG(blob, scale, chamfer);
+                    return head === '(' ? parseMOGOld(blob, scale, chamfer, jitter) : parseMOG(blob, scale, chamfer, jitter);
                 });
             }
             // case 'vox':

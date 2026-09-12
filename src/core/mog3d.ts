@@ -37,7 +37,7 @@ function unit(vec: number[]): number[] {
     return [vec[0] / length, vec[1] / length, vec[2] / length];
 }
 
-export async function parseMOG(blob: Blob, scale: number | null, chamfer: number = 0.0): Promise<Composit[]> {
+export async function parseMOG(blob: Blob, scale: number | null, chamfer: number = 0.0, jitter: number = 0.0): Promise<Composit[]> {
     const text = await blob.text();
     const json = JSON.parse(text);
     const composits: Composit[] = [];
@@ -47,7 +47,7 @@ export async function parseMOG(blob: Blob, scale: number | null, chamfer: number
     const palette = Uint8Array.from(atob(json.palette), c => c.charCodeAt(0));
 
     const models = json.layers.map((jsonlayer: any) => {
-        return decode(dsize, palette, jsonlayer.name, jsonlayer.data, s, chamfer);
+        return decode(dsize, palette, jsonlayer.name, jsonlayer.data, s, chamfer, jitter);
     });
 
     const bones: Bone[] = [];
@@ -68,11 +68,12 @@ function decode(
     name: string,
     data: string,
     scale: number,
-    chamfer: number)
+    chamfer: number,
+    jitter: number = 0.0)
     : Model
 {
     const { gmap, cmap } = decodeGrid(dsize, data);
-    return buildModel(name, dsize, gmap, cmap, palette, scale, chamfer);
+    return buildModel(name, dsize, gmap, cmap, palette, scale, chamfer, jitter);
 }
 
 /**
@@ -129,6 +130,17 @@ export function decodeGrid(dsize: [number, number, number], data: string): { gma
  * Edges are beveled only where the model as a whole is convex there, so a flat
  * run of voxels stays flat instead of every voxel being beveled on its own.
  *
+ * `jitter` displaces every emitted vertex by up to that ratio of the voxel size
+ * on each axis, drawn independently (0.0 disables it). Voxel grids put many
+ * surfaces on exactly the same plane — most of all where two layers of the same
+ * model meet, since each layer is meshed on its own and both emit the shared
+ * face. Displacing the vertices keeps those planes from landing on the same
+ * depth and fighting over which one is drawn.
+ *
+ * The displacement is drawn per vertex, not per position, so vertices that
+ * coincide move apart: the surface is no longer watertight and the silhouette
+ * is no longer perfectly straight. Keep the amount far below the voxel size.
+ *
  * @param gmap occupancy map (bit 0x40 marks a filled voxel)
  * @param cmap palette index per voxel
  */
@@ -139,11 +151,13 @@ export function buildModel(
     cmap: Uint8Array,
     palette: Uint8Array,
     scale: number,
-    chamfer: number = 0.0)
+    chamfer: number = 0.0,
+    jitter: number = 0.0)
     : Model
 {
     const half = scale / 2;
     const width = Math.min(Math.max(chamfer, 0.0), 0.5) * scale;
+    const noise = Math.max(jitter, 0.0) * scale;
 
     const solid = (x: number, y: number, z: number): boolean => {
         if (x < 0 || y < 0 || z < 0 || x >= dsize[0] || y >= dsize[1] || z >= dsize[2]) return false;
@@ -250,13 +264,22 @@ export function buildModel(
         return [corner(x, y, z, i, j, low), corner(x, y, z, i, j, low ^ 1)];
     };
 
+    /** displaces a vertex by up to `noise` on each axis */
+    const shake = (point: number[]): number[] => [
+        point[0] + (Math.random() * 2 - 1) * noise,
+        point[1] + (Math.random() * 2 - 1) * noise,
+        point[2] + (Math.random() * 2 - 1) * noise,
+    ];
+
     let vp = 0;
     const emit = (points: number[][], normal: number[], p: number): void => {
         const c = cmap[p];
         const color = [palette[c * 4 + 0], palette[c * 4 + 1], palette[c * 4 + 2]];
         for (const point of points) {
             model.indices[vp] = vp;
-            model.vertexs.set(point, vp * 3);
+            // the normal is left alone: the displacement is far too small to
+            // shade differently, and recomputing it would break the flat look
+            model.vertexs.set(noise > 0 ? shake(point) : point, vp * 3);
             model.normals.set(normal, vp * 3);
             model.colors.set(color, vp * 3);
             vp++;

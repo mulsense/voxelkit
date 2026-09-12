@@ -355,7 +355,7 @@ function parseBones(node: SpioNode, dsize: [number, number, number], scale: numb
     return bones;
 }
 
-function parseUnit(node: SpioNode, version: string, scale: number | null, chamfer: number): Composit {
+function parseUnit(node: SpioNode, version: string, scale: number | null, chamfer: number, jitter: number): Composit {
     const size = numbers(child(node, 'size'));
     let dsize: [number, number, number] = [size[0] ?? 0, size[1] ?? 0, size[2] ?? 0];
 
@@ -385,14 +385,14 @@ function parseUnit(node: SpioNode, version: string, scale: number | null, chamfe
 
         if (vmap === null) {
             const empty = new Uint8Array(dsize[0] * dsize[1] * dsize[2]);
-            return buildModel(name, dsize, empty, empty, palette, s, chamfer);
+            return buildModel(name, dsize, empty, empty, palette, s, chamfer, jitter);
         }
 
         const { memA, memB } = decodeVmap(vmap);
         const memC = cmap !== null ? decodeCmap(cmap, legacy) : [];
         const { gmap, cmap: indices } = decodeMaps(dsize, rect, memA, memB, memC);
 
-        return buildModel(name, dsize, gmap, indices, palette, s, chamfer);
+        return buildModel(name, dsize, gmap, indices, palette, s, chamfer, jitter);
     });
 
     const bones = (version === '0.3' || version === '1.0') ? parseBones(node, base, s) : [];
@@ -400,9 +400,9 @@ function parseUnit(node: SpioNode, version: string, scale: number | null, chamfe
     return { models, bones, dsize: base };
 }
 
-export async function parseMOGOld(blob: Blob, scale: number | null, chamfer: number = 0.0): Promise<Composit[]> {
+export async function parseMOGOld(blob: Blob, scale: number | null, chamfer: number = 0.0, jitter: number = 0.0): Promise<Composit[]> {
     const root = parseSpio(new Uint8Array(await blob.arrayBuffer()));
     const version = child(root, '.mog')?.text ?? '';
 
-    return childs(root, 'unit').map(node => parseUnit(node, version, scale, chamfer));
+    return childs(root, 'unit').map(node => parseUnit(node, version, scale, chamfer, jitter));
 }

@@ -37,13 +37,15 @@ declare class Bone {
 }
 
 declare const voxelkit: {
-    load(path: string, { scale, chamfer }?: {
+    load(path: string, { scale, chamfer, jitter }?: {
         scale?: number | null;
         chamfer?: number;
+        jitter?: number;
     }): any;
-    parse(blob: Blob, { scale, chamfer, extension }?: {
+    parse(blob: Blob, { scale, chamfer, jitter, extension }?: {
         scale?: number | null;
         chamfer?: number;
+        jitter?: number;
         extension?: string;
     }): Promise<Composit[]>;
     convertVRM(composit: Composit): Promise<Uint8Array<ArrayBufferLike>>;
