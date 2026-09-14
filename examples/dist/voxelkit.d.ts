@@ -69,6 +69,13 @@ declare class Bone {
     distance(vec: Vec3): number;
 }
 
+interface OBJFiles {
+    /** the Wavefront OBJ text. It points at the material library by `mtlName` */
+    obj: string;
+    /** the material library (MTL) holding one material per color */
+    mtl: string;
+}
+
 declare const voxelkit: {
     load(path: string, { scale, chamfer, jitter }?: {
         scale?: number | null;
@@ -89,7 +96,15 @@ declare const voxelkit: {
     convertVRM(composit: Composit, { meta }?: {
         meta?: Partial<VRMMeta>;
     }): Promise<Uint8Array<ArrayBufferLike>>;
+    /**
+     * Converts to Wavefront OBJ and its MTL. Bones are ignored: the mesh is
+     * written in the pose it was modelled in. `mtlName` is the file name the
+     * OBJ refers to, so save the MTL under the same name next to it.
+     */
+    convertOBJ(composit: Composit, { mtlName }?: {
+        mtlName?: string;
+    }): OBJFiles;
 };
 
 export { voxelkit as default };
-export type { Composit, VRMMeta };
+export type { Composit, OBJFiles, VRMMeta };

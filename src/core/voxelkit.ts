@@ -1,6 +1,7 @@
 import { Composit } from './model';
 import { parseMOG } from './mog3d';
 import { parseMOGOld } from './mog3d_old';
+import { convertOBJ } from './obj';
 import { convertVRM } from './vrm';
 import { VRMMeta, buildVRMMeta } from './vrm_meta';
 
@@ -56,5 +57,14 @@ export const voxelkit = {
      */
     convertVRM(composit: Composit, { meta = {} }: { meta?: Partial<VRMMeta> } = {}) {
         return convertVRM(composit.models, composit.bones, buildVRMMeta(composit.meta, meta));
+    },
+
+    /**
+     * Converts to Wavefront OBJ and its MTL. Bones are ignored: the mesh is
+     * written in the pose it was modelled in. `mtlName` is the file name the
+     * OBJ refers to, so save the MTL under the same name next to it.
+     */
+    convertOBJ(composit: Composit, { mtlName = 'model.mtl' }: { mtlName?: string } = {}) {
+        return convertOBJ(composit.models, mtlName);
     }
 };
