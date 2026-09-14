@@ -214,6 +214,81 @@ class Bone {
     }
 }
 
+/**
+ * What was written before meta could be given, and what a model without any
+ * gets: the narrowest terms VRM offers.
+ */
+const DEFAULT_VRM_META = {
+    name: 'model',
+    version: '1.0',
+    authors: ['Author'],
+    allowAntisocialOrHateUsage: false,
+    allowExcessivelySexualUsage: false,
+    allowExcessivelyViolentUsage: false,
+    allowPoliticalOrReligiousUsage: false,
+    avatarPermission: 'onlyAuthor',
+    commercialUsage: 'personalNonProfit',
+    creditNotation: 'required',
+    modification: 'prohibited',
+    licenseUrl: 'https://vrm.dev/licenses/1.0/',
+};
+const CHOICES = {
+    avatarPermission: ['onlyAuthor', 'onlySeparatelyLicensedPerson', 'everyone'],
+    commercialUsage: ['personalNonProfit', 'personalProfit', 'corporation'],
+    creditNotation: ['required', 'unnecessary'],
+    modification: ['prohibited', 'allowModification', 'allowModificationRedistribution'],
+};
+const TEXTS = ['name', 'version', 'copyrightInformation', 'contactInformation', 'thirdPartyLicenses', 'licenseUrl', 'otherLicenseUrl'];
+const LISTS = ['authors', 'references'];
+const FLAGS = [
+    'allowExcessivelyViolentUsage',
+    'allowExcessivelySexualUsage',
+    'allowPoliticalOrReligiousUsage',
+    'allowAntisocialOrHateUsage',
+    'allowRedistribution',
+];
+/**
+ * Keeps only the VRM meta keys whose values have the right shape. Anything
+ * else — unknown keys, a choice VRM does not define, an empty string or list,
+ * a flag that is not a boolean — is dropped, so it falls back to whatever the
+ * meta is merged onto instead of ending up in the file.
+ */
+function pickVRMMeta(raw) {
+    if (raw === null || typeof raw !== 'object')
+        return {};
+    const source = raw;
+    const meta = {};
+    for (const key of TEXTS) {
+        const value = source[key];
+        if (typeof value === 'string' && value !== '')
+            meta[key] = value;
+    }
+    for (const key of LISTS) {
+        const value = source[key];
+        if (Array.isArray(value)) {
+            const items = value.filter((item) => typeof item === 'string' && item !== '');
+            if (items.length > 0)
+                meta[key] = items;
+        }
+    }
+    for (const key of FLAGS) {
+        if (typeof source[key] === 'boolean')
+            meta[key] = source[key];
+    }
+    for (const [key, choices] of Object.entries(CHOICES)) {
+        if (choices.includes(source[key]))
+            meta[key] = source[key];
+    }
+    return meta;
+}
+/**
+ * The meta written into a VRM: the defaults, then each given layer over the
+ * previous one (typically the `.mog`'s own meta, then what the caller passes).
+ */
+function buildVRMMeta(...layers) {
+    return layers.reduce((meta, layer) => (Object.assign(Object.assign({}, meta), pickVRMMeta(layer))), Object.assign({}, DEFAULT_VRM_META));
+}
+
 /** face index: 0:-x 1:+x 2:-y 3:+y 4:-z 5:+z (opposite face is `index ^ 1`) */
 const FACE_DIRS = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]];
 /** in-plane axes (u, v) of each face, as face indices. cross(u, v) equals the face normal */
@@ -271,7 +346,8 @@ function parseMOG(blob_1, scale_1) {
             const vec1 = Vec3.mul(new Vec3(jsonbone.vector[3], jsonbone.vector[4], jsonbone.vector[5]), s);
             bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.layers));
         }
-        composits.push({ models, bones, dsize });
+        // `meta` (VRM meta) is optional, and so is every key in it
+        composits.push({ models, bones, dsize, meta: pickVRMMeta(json.meta) });
         return composits;
     });
 }
@@ -832,8 +908,8 @@ function parseMOGOld(blob_1, scale_1) {
     });
 }
 
-function convertVRM(models, bones) {
-    return __awaiter(this, void 0, void 0, function* () {
+function convertVRM(models_1, bones_1) {
+    return __awaiter(this, arguments, void 0, function* (models, bones, meta = buildVRMMeta()) {
         const size = models.reduce((a, b) => a + b.indices.length, 0);
         const model = new Model('composit', size);
         const joints = []; // unsigned short x4
@@ -1031,20 +1107,7 @@ function convertVRM(models, bones) {
             extensions: {
                 VRMC_vrm: {
                     specVersion: "1.0",
-                    meta: {
-                        name: "model",
-                        version: "1.0",
-                        authors: ["Author"],
-                        allowAntisocialOrHateUsage: false,
-                        allowExcessivelySexualUsage: false,
-                        allowExcessivelyViolentUsage: false,
-                        allowPoliticalOrReligiousUsage: false,
-                        avatarPermission: "onlyAuthor",
-                        commercialUsage: "personalNonProfit",
-                        creditNotation: "required",
-                        modification: "prohibited",
-                        licenseUrl: "https://vrm.dev/licenses/1.0/",
-                    },
+                    meta,
                     humanoid: {
                         humanBones: {},
                     },
@@ -1134,8 +1197,13 @@ const voxelkit = {
                 return Promise.reject(new Error(`Unsupported file format: ${extension}`));
         }
     },
-    convertVRM(composit) {
-        return convertVRM(composit.models, composit.bones);
+    /**
+     * Converts to VRM 1.0. The meta starts from the defaults, takes what the
+     * `.mog` carries under `meta`, then whatever is passed here — the model's
+     * name lives outside the file, so it comes in this way. Malformed values are ignored rather than written.
+     */
+    convertVRM(composit, { meta = {} } = {}) {
+        return convertVRM(composit.models, composit.bones, buildVRMMeta(composit.meta, meta));
     }
 };
 

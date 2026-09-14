@@ -1,6 +1,7 @@
 import { segment, hmMakeTableFromLngs, table256, zlDecode } from './code';
 import { Vec3 } from './vector';
 import { Composit, Model, Bone } from './model';
+import { pickVRMMeta } from './vrm_meta';
 
 /** face index: 0:-x 1:+x 2:-y 3:+y 4:-z 5:+z (opposite face is `index ^ 1`) */
 const FACE_DIRS: number[][] = [[-1, 0, 0], [+1, 0, 0], [0, -1, 0], [0, +1, 0], [0, 0, -1], [0, 0, +1]];
@@ -69,7 +70,8 @@ export async function parseMOG(blob: Blob, scale: number | null, chamfer: number
         const vec1 = Vec3.mul(new Vec3(jsonbone.vector[3], jsonbone.vector[4], jsonbone.vector[5]), s);
         bones.push(new Bone(parent, jsonbone.name, vec0, vec1, jsonbone.layers));
     }
-    composits.push({ models, bones, dsize });
+    // `meta` (VRM meta) is optional, and so is every key in it
+    composits.push({ models, bones, dsize, meta: pickVRMMeta(json.meta) });
    
     return composits;
 }

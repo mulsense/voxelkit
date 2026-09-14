@@ -1,7 +1,8 @@
 import { Vec3 } from './vector';
 import { Model, Bone } from './model';
+import { VRMMeta, buildVRMMeta } from './vrm_meta';
 
-export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8Array> {
+export async function convertVRM(models: Model[], bones: Bone[], meta: VRMMeta = buildVRMMeta()): Promise<Uint8Array> {
     const size = models.reduce((a, b) => a + b.indices.length, 0);
     const model = new Model('composit', size);
 
@@ -204,20 +205,7 @@ export async function convertVRM(models: Model[], bones: Bone[]): Promise<Uint8A
         extensions: {
             VRMC_vrm: {
                 specVersion: "1.0",
-                meta: {
-                    name: "model",
-                    version: "1.0",
-                    authors: ["Author"],
-                    allowAntisocialOrHateUsage: false,
-                    allowExcessivelySexualUsage: false,
-                    allowExcessivelyViolentUsage: false,
-                    allowPoliticalOrReligiousUsage: false,
-                    avatarPermission: "onlyAuthor",
-                    commercialUsage: "personalNonProfit",
-                    creditNotation: "required",
-                    modification: "prohibited",
-                    licenseUrl: "https://vrm.dev/licenses/1.0/",
-                },
+                meta,
                 humanoid: {
                     humanBones: {},
                 },

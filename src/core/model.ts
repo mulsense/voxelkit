@@ -1,9 +1,12 @@
 import { Vec3 } from './vector';
+import { VRMMeta } from './vrm_meta';
 
 export interface Composit {
     models: Model[];
     bones: Bone[];
     dsize: [number, number, number];
+    /** VRM meta the file carries under `meta` (only the well-formed keys) */
+    meta?: Partial<VRMMeta>;
 }
 
 export class Model {

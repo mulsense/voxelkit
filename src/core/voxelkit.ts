@@ -2,6 +2,7 @@ import { Composit } from './model';
 import { parseMOG } from './mog3d';
 import { parseMOGOld } from './mog3d_old';
 import { convertVRM } from './vrm';
+import { VRMMeta, buildVRMMeta } from './vrm_meta';
 
 /**
  * Default jitter, as a ratio of the voxel size.
@@ -48,7 +49,12 @@ export const voxelkit = {
         }
     },
 
-    convertVRM(composit: Composit) {
-        return convertVRM(composit.models, composit.bones);
+    /**
+     * Converts to VRM 1.0. The meta starts from the defaults, takes what the
+     * `.mog` carries under `meta`, then whatever is passed here — the model's
+     * name lives outside the file, so it comes in this way. Malformed values are ignored rather than written.
+     */
+    convertVRM(composit: Composit, { meta = {} }: { meta?: Partial<VRMMeta> } = {}) {
+        return convertVRM(composit.models, composit.bones, buildVRMMeta(composit.meta, meta));
     }
 };
