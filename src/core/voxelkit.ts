@@ -1,6 +1,7 @@
 import { Composit } from './model';
 import { parseMOG } from './mog3d';
 import { parseMOGOld } from './mog3d_old';
+import { convertGLB } from './glb';
 import { convertOBJ } from './obj';
 import { convertVRM } from './vrm';
 import { VRMMeta, buildVRMMeta } from './vrm_meta';
@@ -66,5 +67,14 @@ export const voxelkit = {
      */
     convertOBJ(composit: Composit, { mtlName = 'model.mtl' }: { mtlName?: string } = {}) {
         return convertOBJ(composit.models, mtlName);
+    },
+
+    /**
+     * Converts to glTF 2.0 binary (GLB). Bones are ignored, as with OBJ: the
+     * mesh is written in the pose it was modelled in. Each color becomes a
+     * material, and each layer a node.
+     */
+    convertGLB(composit: Composit): Uint8Array {
+        return convertGLB(composit.models);
     }
 };

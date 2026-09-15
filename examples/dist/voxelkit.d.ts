@@ -104,6 +104,12 @@ declare const voxelkit: {
     convertOBJ(composit: Composit, { mtlName }?: {
         mtlName?: string;
     }): OBJFiles;
+    /**
+     * Converts to glTF 2.0 binary (GLB). Bones are ignored, as with OBJ: the
+     * mesh is written in the pose it was modelled in. Each color becomes a
+     * material, and each layer a node.
+     */
+    convertGLB(composit: Composit): Uint8Array;
 };
 
 export { voxelkit as default };
